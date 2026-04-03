@@ -565,7 +565,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
     <p style="font-size:14px;font-weight:700;margin-bottom:20px;" id="del-name"></p>
     <div class="fa">
       <button class="btn bs" onclick="closeDeleteModal()">キャンセル</button>
-      <button class="btn bd" onclick="doDelete()">削除する</button>
+      <button class="btn bd" id="del-btn" onclick="doDelete()">削除する</button>
     </div>
   </div>
 </div>
@@ -1356,7 +1356,8 @@ function openDelModal(id,name){deleteId=id;document.getElementById('del-name').t
 function closeDeleteModal(){closeModal('modal-delete');}
 async function doDelete(){
   if(!deleteId)return;
-  var btn=document.getElementById('del-btn');btn.textContent='削除中...';btn.disabled=true;
+  var btn=document.getElementById('del-btn');
+  if(btn){btn.textContent='削除中...';btn.disabled=true;}
   try{
     var name=document.getElementById('del-name').textContent;
     var r=await _sb.from('products').delete().eq('id',deleteId);
@@ -1364,7 +1365,7 @@ async function doDelete(){
     writeLog('delete','products',deleteId,name,null);
     closeDeleteModal();toast('商品を削除しました','success');await loadProducts();
   }catch(e){toast('削除に失敗しました','error');}
-  finally{btn.textContent='削除する';btn.disabled=false;deleteId=null;}
+  finally{if(btn){btn.textContent='削除する';btn.disabled=false;}deleteId=null;}
 }
 
 /* ── CSV ── */

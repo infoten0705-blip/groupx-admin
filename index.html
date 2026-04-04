@@ -3568,7 +3568,7 @@ async function fetchLineImage(lineMsgId, dbId, el) {
   }
   el.innerHTML = '<div class="sp" style="width:14px;height:14px;border-width:2px;margin:auto;"></div>';
   try {
-    var edgeUrl = SB_URL + '/functions/v1/line-get-content';
+    var edgeUrl = SB_URL + '/functions/v1/super-worker';
     var res = await fetch(edgeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SB_KEY },

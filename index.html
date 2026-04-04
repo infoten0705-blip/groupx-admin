@@ -3571,7 +3571,11 @@ async function fetchLineImage(lineMsgId, dbId, el) {
     var edgeUrl = SB_URL + '/functions/v1/super-worker';
     var res = await fetch(edgeUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SB_KEY },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SB_KEY,
+        'apikey': SB_KEY
+      },
       body: JSON.stringify({ message_id: lineMsgId, access_token: token, db_id: dbId })
     });
     var json = {};

@@ -933,7 +933,11 @@ function showPage(name,el){
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
 
   var linePanel = document.getElementById('page-line');
-  if (linePanel) linePanel.style.display = 'none';
+  if (linePanel) {
+    linePanel.style.display = 'none';
+    // LINEページを離れるときRealtimeチャンネルを解除
+    if (_lineRealtimeCh) { _sb.removeChannel(_lineRealtimeCh); _lineRealtimeCh = null; }
+  }
 
   if (name === 'line') {
     if (linePanel) linePanel.style.display = 'flex';
@@ -2536,6 +2540,7 @@ var lineContacts      = [];
 var lineCurrentContact = null;
 var lineMessages      = [];
 var linePollingTimer  = null;
+var _lineRealtimeCh   = null;  // Supabase Realtimeチャンネル
 var lineConfig        = {};
 var _lineSending      = false;   // 二重送信防止フラグ
 var _lineUnreadMap    = {};       // contactId → 未読数
@@ -2544,6 +2549,64 @@ var _lineUnreadMap    = {};       // contactId → 未読数
 async function loadLinePage() {
   try { lineConfig = JSON.parse(localStorage.getItem('line_config')||'{}'); } catch(e){}
   await loadLineContacts();
+  startLineRealtime();
+}
+
+function startLineRealtime() {
+  // 既存チャンネルを解除
+  if (_lineRealtimeCh) { _sb.removeChannel(_lineRealtimeCh); _lineRealtimeCh = null; }
+
+  _lineRealtimeCh = _sb.channel('line-realtime')
+    // 新着メッセージ受信
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'line_messages' }, function(payload) {
+      var msg = payload.new;
+      // 現在開いているトークなら即追加
+      if (lineCurrentContact && msg.contact_id === lineCurrentContact.id) {
+        lineMessages.push(msg);
+        renderLineMessages();
+        setTimeout(scrollLineChatBottom, 50);
+        // 既読マーク
+        _sb.from('line_messages').update({ is_read: true }).eq('id', msg.id).then(function(){});
+      } else {
+        // 別の連絡先 → 未読++
+        var c = lineContacts.find(function(x){ return x.id === msg.contact_id; });
+        if (c && msg.direction === 'inbound') {
+          c._unread = (c._unread || 0) + 1;
+          c.last_message_preview = msg.message_text || (msg.message_type === 'image' ? '[画像]' : msg.message_type === 'sticker' ? '[スタンプ]' : '');
+          c.last_message_at = msg.created_at;
+          c._last_direction = 'inbound';
+          renderLineContactListNoSort();
+        }
+      }
+      // 連絡先リストの並び順更新（新着を上に）
+      var c2 = lineContacts.find(function(x){ return x.id === msg.contact_id; });
+      if (c2) {
+        c2.updated_at = msg.created_at;
+        // リストを更新日順に再ソートして再描画
+        renderLineContactList();
+      }
+    })
+    // 連絡先更新（タグ変更など）
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'line_contacts' }, function(payload) {
+      var updated = payload.new;
+      var idx = lineContacts.findIndex(function(x){ return x.id === updated.id; });
+      if (idx >= 0) {
+        // unread数・pictureなど保持しつつ更新
+        var unread = lineContacts[idx]._unread;
+        var lastDir = lineContacts[idx]._last_direction;
+        lineContacts[idx] = Object.assign(lineContacts[idx], updated, { _unread: unread, _last_direction: lastDir });
+        if (lineCurrentContact && lineCurrentContact.id === updated.id) {
+          lineCurrentContact = lineContacts[idx];
+          renderLineProfile();
+        }
+        renderLineContactListNoSort();
+      }
+    })
+    .subscribe(function(status) {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Realtime] LINE connected');
+      }
+    });
 }
 
 async function loadLineContacts() {
@@ -2615,8 +2678,15 @@ function renderLineContactList() {
   // 検索
   var q = (document.getElementById('line-search')||{value:''}).value.toLowerCase();
   if (q) contacts = contacts.filter(function(c){
-    return (c.display_name||'').toLowerCase().includes(q)||(c.notes||'').toLowerCase().includes(q);
+    return (c.display_name||'').toLowerCase().includes(q)
+      ||(c.notes||'').toLowerCase().includes(q)
+      ||((c.tags||[]).some(function(t){ return t.toLowerCase().includes(q); }));
   });
+
+  // マネージャーフィルタ
+  if (_lineManagerFilter) {
+    contacts = contacts.filter(function(c){ return c.assigned_to === _lineManagerFilter; });
+  }
 
   // ピン留め→更新日順（未読による並び替えなし）
   contacts.sort(function(a,b){
@@ -2635,11 +2705,14 @@ function renderLineContactList() {
     var isActive = lineCurrentContact && lineCurrentContact.id === c.id;
     var isPinned = (c.tags||[]).includes('ピン留め');
     var unread   = c._unread || 0;
-    var tags     = (c.tags||[]).filter(function(t){ return t!=='スパム'&&t!=='管轄外'&&t!=='ピン留め'; });
-    var tagHtml  = tags.slice(0,3).map(function(t){
+    var tags     = (c.tags||[]).filter(function(t){ return t!=='スパム'&&t!=='管轄外'&&t!=='ピン留め'&&t!=='返信済'; });
+    var isReplied = (c.tags||[]).includes('返信済');
+    var shownTags = tags.slice(0,3);
+    var moreCount = tags.length - shownTags.length;
+    var tagHtml  = shownTags.map(function(t){
       var col = t==='CAP'?'#2ABFAB':t==='TSP'?'#a78bfa':t==='要対応'?'#e74c3c':t==='対応済み'?'#2ecc71':t==='VIP'?'#f59e0b':t==='見込み'?'#60a5fa':'#8892a0';
       return '<span style="font-size:9px;padding:1px 6px;border-radius:8px;color:'+col+';border:1px solid '+col+'40;background:'+col+'18;white-space:nowrap;font-weight:600;">'+esc(t)+'</span>';
-    }).join('');
+    }).join('') + (moreCount>0?'<span style="font-size:9px;padding:1px 5px;border-radius:8px;color:var(--muted);border:1px solid var(--border);background:var(--surface);white-space:nowrap;">+'+moreCount+'</span>':'');
 
     // 最新メッセージプレビュー（送受信の区別）
     var preview = '';
@@ -2659,8 +2732,9 @@ function renderLineContactList() {
       +'<div style="flex:1;min-width:0;">'
         +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">'
           +'<span style="font-size:13px;font-weight:'+(unread?'700':'600')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;">'+esc(c.display_name||'名称未設定')+'</span>'
-          +'<div style="display:flex;align-items:center;gap:4px;">'
+          +'<div class="line-badge-wrap" style="display:flex;align-items:center;gap:4px;">'
             +(c.last_message_at?'<span style="font-size:10px;color:var(--muted);white-space:nowrap;">'+formatLineTime(c.last_message_at)+'</span>':'')
+            +(isReplied?'<span title="返信済" style="width:16px;height:16px;border-radius:50%;background:rgba(42,191,171,.2);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);">✓</span>':'')
             +(unread?'<span class="unread-badge" style="width:18px;height:18px;border-radius:50%;background:#2ecc71;color:#000;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">'+unread+'</span>':'')
           +'</div>'
         +'</div>'
@@ -2687,11 +2761,35 @@ function renderLineContactListNoSort() {
     // 名前の太字
     var nameEl = row.querySelector('span');
     if (nameEl) nameEl.style.fontWeight = unread ? '700' : '600';
+    // 返信済チェックマーク更新
+    var bwrap = row.querySelector('.line-badge-wrap');
+    if (bwrap) {
+      var repliedEl = bwrap.querySelector('[title="返信済"]');
+      var isReplied = (c.tags||[]).includes('返信済');
+      if (isReplied && !repliedEl) {
+        var rEl = document.createElement('span');
+        rEl.title = '返信済';
+        rEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:rgba(42,191,171,.2);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);';
+        rEl.textContent = '✓';
+        bwrap.insertBefore(rEl, bwrap.querySelector('.unread-badge'));
+      } else if (!isReplied && repliedEl) {
+        repliedEl.remove();
+      }
+    }
     // バッジ
     var badgeEl = row.querySelector('.unread-badge');
     if (badgeEl) {
       badgeEl.textContent = unread;
       badgeEl.style.display = unread ? 'flex' : 'none';
+    } else if (unread > 0) {
+      var badgeWrap = row.querySelector('.line-badge-wrap');
+      if (badgeWrap) {
+        var nb = document.createElement('span');
+        nb.className = 'unread-badge';
+        nb.style.cssText = 'width:18px;height:18px;border-radius:50%;background:#2ecc71;color:#000;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;';
+        nb.textContent = unread;
+        badgeWrap.appendChild(nb);
+      }
     }
   });
 }
@@ -2755,11 +2853,8 @@ async function selectLineContact(id) {
   // 並び替えなし - バッジのみ更新
   renderLineContactListNoSort();
 
-  // ポーリング
-  if (linePollingTimer) clearInterval(linePollingTimer);
-  linePollingTimer = setInterval(function(){
-    if (lineCurrentContact) loadLineMessages(true);
-  }, 10000);
+  // ポーリング不要（Realtime使用）
+  if (linePollingTimer) { clearInterval(linePollingTimer); linePollingTimer = null; }
 }
 
 /* ── メッセージ読み込み ──────────────────── */
@@ -3258,13 +3353,13 @@ function lineTagColor(t) {
   return '#8892a0';
 }
 
-/* ── プロフィールパネル描画 ── */
 function renderLineProfile() {
   var wrap = document.getElementById('line-profile-wrap');
   if (!wrap || !lineCurrentContact) return;
   var c = lineCurrentContact;
   var tags = c.tags || [];
   var LINE_PRESET_TAGS = ['CAP','TSP','要対応','対応済み','VIP','見込み','保留'];
+  var HIDDEN_TAGS = ['ピン留め','スパム','管轄外','返信済']; // 名前下タグピルに表示しない
 
   var tagBtns = LINE_PRESET_TAGS.map(function(t) {
     var on  = tags.includes(t);
@@ -3272,20 +3367,36 @@ function renderLineProfile() {
     return '<button onclick="toggleLineTag(\''+esc(t)+'\')" style="font-size:11px;padding:4px 11px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:all .15s;border:1px solid '+(on?col:'rgba(255,255,255,.12)')+';background:'+(on?col.replace('var(--','rgba(').replace(')',', .2)').replace(/^(#[0-9a-f]{6})/i,function(m){return m+'26'}):'rgba(255,255,255,.04)')+';color:'+(on?col:'#8892a0')+';font-weight:'+(on?'700':'400')+';">'+esc(t)+'</button>';
   }).join('');
 
-  var activeTags = tags.filter(function(t){ return !['ピン留め'].includes(t); });
-  var tagPills = activeTags.map(function(t){
+  // 名前下タグピル：SPAM・管轄外・返信済は除外、最大3つ＋残りは+Nボタン
+  var visibleTags = tags.filter(function(t){ return !HIDDEN_TAGS.includes(t); });
+  var shownTags = visibleTags.slice(0, 3);
+  var hiddenTags = visibleTags.slice(3);
+  var tagPills = shownTags.map(function(t){
     var col = lineTagColor(t);
     return '<span style="font-size:10px;padding:2px 8px;border-radius:12px;color:'+col+';border:1px solid '+col+';background:'+col.replace('var(--','rgba(').replace(')',',0.15)').replace(/^(#[0-9a-f]{6})/i,function(m){return m+'26'})+';display:inline-flex;align-items:center;gap:3px;font-weight:600;">'+esc(t)+'<span onclick="toggleLineTag(\''+esc(t)+'\')" style="cursor:pointer;opacity:.7;font-size:10px;">×</span></span>';
   }).join('');
+  var moreBtn = hiddenTags.length > 0
+    ? '<button onclick="showAllLineTags(this)" style="font-size:10px;padding:2px 7px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;">+'+hiddenTags.length+'</button>'
+    : '';
+
+  // SPAM・管轄外トグル状態
+  var isSpam  = tags.includes('スパム');
+  var isOther = tags.includes('管轄外');
+  var isReplied = tags.includes('返信済');
 
   wrap.innerHTML =
     '<div style="text-align:center;padding:20px 16px 12px;border-bottom:1px solid var(--border);">'
       +'<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;margin:0 auto 10px;background:var(--surface);border:2px solid var(--border);">'
         +(c.picture_url?'<img src="'+esc(c.picture_url)+'" style="width:100%;height:100%;object-fit:cover;">':'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--muted);">'+(c.display_name?c.display_name[0]:'?')+'</div>')
       +'</div>'
-      +'<div style="font-size:15px;font-weight:700;margin-bottom:4px;">'+esc(c.display_name||'名称未設定')+'</div>'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:4px;">'
+        +'<div style="font-size:15px;font-weight:700;" id="line-profile-name">'+esc(c.display_name||'名称未設定')+'</div>'
+        +'<button onclick="startEditLineName(document.getElementById(\'line-profile-name\'))" title="名前を編集" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:2px;display:flex;align-items:center;transition:color .15s;" onmouseenter="this.style.color=\'var(--accent)\'" onmouseleave="this.style.color=\'var(--muted)\'">'
+          +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+        +'</button>'
+      +'</div>'
       +(c.status_message?'<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">'+esc(c.status_message)+'</div>':'')
-      +(activeTags.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:4px;">'+tagPills+'</div>':'')
+      +(visibleTags.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:4px;">'+tagPills+moreBtn+'</div>':'')
     +'</div>'
     +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);">'
       +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">タグ</div>'
@@ -3311,13 +3422,27 @@ function renderLineProfile() {
       +'<textarea onchange="saveLineNote(this.value)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:12px;resize:vertical;min-height:70px;outline:none;box-sizing:border-box;">'+esc(c.notes||'')+'</textarea>'
     +'</div>'
     +'<div style="padding:12px 14px;">'
-      +'<div style="display:flex;gap:6px;">'
-        +'<button onclick="markLineSpam()" style="flex:1;background:none;border:1px solid rgba(231,76,60,.3);border-radius:6px;padding:7px;cursor:pointer;color:var(--danger);font-size:12px;">SPAM</button>'
-        +'<button onclick="markLineOther()" style="flex:1;background:none;border:1px solid var(--border);border-radius:6px;padding:7px;cursor:pointer;color:var(--muted);font-size:12px;">管轄外</button>'
+      +'<div style="display:flex;gap:5px;">'
+        +'<button onclick="toggleLineSpam()" style="flex:1;background:'+(isSpam?'rgba(231,76,60,.15)':'none')+';border:1px solid '+(isSpam?'var(--danger)':'rgba(231,76,60,.3)')+';border-radius:6px;padding:6px 4px;cursor:pointer;color:var(--danger);font-size:11px;white-space:nowrap;font-weight:'+(isSpam?'700':'400')+';">'+(isSpam?'✓SPAM':'SPAM')+'</button>'
+        +'<button onclick="toggleLineOther()" style="flex:1;background:'+(isOther?'rgba(136,146,160,.15)':'none')+';border:1px solid var(--border);border-radius:6px;padding:6px 4px;cursor:pointer;color:var(--muted);font-size:11px;white-space:nowrap;font-weight:'+(isOther?'700':'400')+';">'+(isOther?'✓管轄外':'管轄外')+'</button>'
+        +'<button onclick="toggleLineReplied()" style="flex:1;background:'+(isReplied?'rgba(42,191,171,.15)':'none')+';border:1px solid '+(isReplied?'var(--accent)':'var(--border)')+';border-radius:6px;padding:6px 4px;cursor:pointer;color:'+(isReplied?'var(--accent)':'var(--muted)')+';font-size:11px;white-space:nowrap;font-weight:'+(isReplied?'700':'400')+';">'+(isReplied?'✓返信済':'返信済')+'</button>'
       +'</div>'
     +'</div>';
 
   populateLineManagerSelect(c.assigned_to);
+}
+
+function showAllLineTags(btn) {
+  // +Nボタンを押したら残りのタグピルを全部展開
+  var c = lineCurrentContact;
+  if (!c) return;
+  var HIDDEN = ['ピン留め','スパム','管轄外','返信済'];
+  var allTags = (c.tags||[]).filter(function(t){ return !HIDDEN.includes(t); });
+  var wrap = btn.parentElement;
+  wrap.innerHTML = allTags.map(function(t){
+    var col = lineTagColor(t);
+    return '<span style="font-size:10px;padding:2px 8px;border-radius:12px;color:'+col+';border:1px solid '+col+';background:'+col.replace('var(--','rgba(').replace(')',',0.15)').replace(/^(#[0-9a-f]{6})/i,function(m){return m+'26'})+';display:inline-flex;align-items:center;gap:3px;font-weight:600;">'+esc(t)+'<span onclick="toggleLineTag(\''+esc(t)+'\')" style="cursor:pointer;opacity:.7;font-size:10px;">×</span></span>';
+  }).join('');
 }
 
 function addLineCustomTag() {
@@ -3329,41 +3454,41 @@ function addLineCustomTag() {
   toggleLineTag(tag);
 }
 
-async function markLineSpam() {
+async function toggleLineSpam() {
   if (!lineCurrentContact) return;
-  if (!confirm((lineCurrentContact.display_name||'この連絡先')+'をSPAMとしてマークしますか？')) return;
   var tags = lineCurrentContact.tags ? lineCurrentContact.tags.slice() : [];
-  if (!tags.includes('スパム')) tags.push('スパム');
+  var isSpam = tags.includes('スパム');
+  if (!isSpam) {
+    if (!confirm((lineCurrentContact.display_name||'この連絡先')+'をSPAMとしてマークしますか？')) return;
+    tags.push('スパム');
+  } else {
+    tags = tags.filter(function(t){ return t !== 'スパム'; });
+  }
   await _sb.from('line_contacts').update({ tags: tags }).eq('id', lineCurrentContact.id);
   lineCurrentContact.tags = tags;
-  lineContacts = lineContacts.filter(function(c){ return c.id !== lineCurrentContact.id; });
-  lineCurrentContact = null;
-  var prof   = document.getElementById('line-profile-panel');
-  var empty  = document.getElementById('line-chat-empty');
-  var active = document.getElementById('line-chat-active');
-  if (prof)   prof.style.display   = 'none';
-  if (empty)  empty.style.display  = 'flex';
-  if (active) active.style.display = 'none';
+  var c2 = lineContacts.find(function(c){ return c.id === lineCurrentContact.id; });
+  if (c2) c2.tags = tags;
+  renderLineProfile();
   renderLineContactList();
-  toast('SPAMに移動しました', 'success');
+  toast(isSpam ? 'SPAMを解除しました' : 'SPAMに移動しました', 'success');
 }
 
-async function markLineOther() {
+async function toggleLineOther() {
   if (!lineCurrentContact) return;
   var tags = lineCurrentContact.tags ? lineCurrentContact.tags.slice() : [];
-  if (!tags.includes('管轄外')) tags.push('管轄外');
+  var isOther = tags.includes('管轄外');
+  if (!isOther) {
+    tags.push('管轄外');
+  } else {
+    tags = tags.filter(function(t){ return t !== '管轄外'; });
+  }
   await _sb.from('line_contacts').update({ tags: tags }).eq('id', lineCurrentContact.id);
   lineCurrentContact.tags = tags;
-  lineContacts = lineContacts.filter(function(c){ return c.id !== lineCurrentContact.id; });
-  lineCurrentContact = null;
-  var prof   = document.getElementById('line-profile-panel');
-  var empty  = document.getElementById('line-chat-empty');
-  var active = document.getElementById('line-chat-active');
-  if (prof)   prof.style.display   = 'none';
-  if (empty)  empty.style.display  = 'flex';
-  if (active) active.style.display = 'none';
+  var c2 = lineContacts.find(function(c){ return c.id === lineCurrentContact.id; });
+  if (c2) c2.tags = tags;
+  renderLineProfile();
   renderLineContactList();
-  toast('管轄外に移動しました', 'success');
+  toast(isOther ? '管轄外を解除しました' : '管轄外に移動しました', 'success');
 }
 
 async function setLineDone() {
@@ -3508,6 +3633,95 @@ async function populateLineManagerSelect(currentId) {
     }).join('');
 }
 
+function startEditLineName(el) {
+  if (el.querySelector('input')) return;
+  var current = lineCurrentContact ? (lineCurrentContact.display_name || '') : '';
+  el.innerHTML = '';
+  var inp = document.createElement('input');
+  inp.value = current;
+  inp.style.cssText = 'font-size:15px;font-weight:700;background:var(--surface);border:1px solid var(--accent);border-radius:6px;padding:2px 8px;color:var(--text);outline:none;width:100%;box-sizing:border-box;text-align:center;';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+  function save() {
+    var newName = inp.value.trim();
+    if (newName && newName !== current) {
+      saveLineContactName(newName);
+    } else {
+      el.textContent = current || '名称未設定';
+    }
+  }
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { el.textContent = current || '名称未設定'; }
+  });
+  inp.addEventListener('blur', save);
+}
+
+async function saveLineContactName(newName) {
+  if (!lineCurrentContact) return;
+  await _sb.from('line_contacts').update({ display_name: newName }).eq('id', lineCurrentContact.id);
+  lineCurrentContact.display_name = newName;
+  var c2 = lineContacts.find(function(x){ return x.id === lineCurrentContact.id; });
+  if (c2) c2.display_name = newName;
+  renderLineProfile();
+  renderLineContactList();
+  toast('名前を更新しました', 'success');
+}
+
+async function toggleLineMgrFilter() {
+  var existing = document.getElementById('ltab-mgr-panel');
+  if (existing) { existing.remove(); return; }
+  var btn = document.getElementById('ltab-mgr-btn');
+  if (!btn) return;
+  var r = await _sb.from('managers').select('id,name').eq('is_active', true);
+  var managers = r.data || [];
+  var rect = btn.getBoundingClientRect();
+  var panel = document.createElement('div');
+  panel.id = 'ltab-mgr-panel';
+  panel.style.cssText = 'position:fixed;top:'+(rect.bottom+4)+'px;left:'+rect.left+'px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:9999;min-width:130px;padding:4px 0;';
+  panel.innerHTML = '<div onclick="setLineMgrFilter(null)" style="padding:7px 14px;font-size:12px;cursor:pointer;color:'+(_lineManagerFilter===null?'var(--accent)':'var(--text)')+';">すべて</div>'
+    + managers.map(function(m){
+      var active = _lineManagerFilter === m.id;
+      var label = m.name ? m.name.split(/[\s　]/)[0] : m.name;
+      return '<div onclick="setLineMgrFilter(\''+m.id.replace(/'/g,"\\'")+'\')" style="padding:7px 14px;font-size:12px;cursor:pointer;color:'+(active?'var(--accent)':'var(--text)')+';">'
+        +(active?'✓ ':'')+esc(label)+'</div>';
+    }).join('');
+  document.body.appendChild(panel);
+  setTimeout(function(){
+    document.addEventListener('click', function h(e){
+      if (!panel.contains(e.target) && e.target.id !== 'ltab-mgr-btn') {
+        panel.remove();
+        document.removeEventListener('click', h);
+      }
+    });
+  }, 0);
+}
+
+function setLineMgrFilter(id) {
+  _lineManagerFilter = id;
+  var panel = document.getElementById('ltab-mgr-panel');
+  if (panel) panel.style.display = 'none';
+  var label = document.getElementById('ltab-mgr-label');
+  var btn = document.getElementById('ltab-mgr-btn');
+  if (label) label.textContent = id ? '担当者✓▾' : '担当者▾';
+  if (btn) btn.style.color = id ? 'var(--accent)' : 'var(--muted)';
+  renderLineContactList();
+}
+async function toggleLineReplied() {
+  if (!lineCurrentContact) return;
+  var tags = lineCurrentContact.tags ? [...lineCurrentContact.tags] : [];
+  var idx = tags.indexOf('返信済');
+  if (idx >= 0) tags.splice(idx, 1); else tags.push('返信済');
+  await _sb.from('line_contacts').update({ tags: tags }).eq('id', lineCurrentContact.id);
+  lineCurrentContact.tags = tags;
+  var c2 = lineContacts.find(function(x){ return x.id === lineCurrentContact.id; });
+  if (c2) c2.tags = tags;
+  renderLineProfile();
+  renderLineContactListNoSort();
+  toast(tags.includes('返信済') ? '返信済にしました' : '返信済を解除しました', 'success');
+}
+
 async function toggleLineTag(tag) {
   if (!lineCurrentContact) return;
   var tags = lineCurrentContact.tags ? [...lineCurrentContact.tags] : [];
@@ -3515,6 +3729,8 @@ async function toggleLineTag(tag) {
   if (idx >= 0) tags.splice(idx, 1); else tags.push(tag);
   await _sb.from('line_contacts').update({ tags: tags }).eq('id', lineCurrentContact.id);
   lineCurrentContact.tags = tags;
+  var c2 = lineContacts.find(function(x){ return x.id === lineCurrentContact.id; });
+  if (c2) c2.tags = tags;
   renderLineProfile();
   renderLineContactList();
 }
@@ -3721,6 +3937,7 @@ function lineDrop(e) {
    ③ タグフィルターの固定ロック
    ══════════════════════════════════════════════ */
 var _lineTabLocked = false;
+var _lineManagerFilter = null; // マネージャーフィルタ
 var _lineLockedTab = 'all';
 
 function toggleLineTabLock() {
@@ -4982,6 +5199,13 @@ function toast(msg,type){
         <div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;border-bottom:2px solid var(--border);align-items:center;">
           <button id="ltab-all"  class="cr-tab cr-tab-active" onclick="switchLineTab('all')"  style="font-size:11px;padding:8px 10px;white-space:nowrap;">すべて</button>
           <button id="ltab-cap"  class="cr-tab" onclick="switchLineTab('cap')"  style="font-size:11px;padding:8px 10px;white-space:nowrap;color:var(--accent);">CAP</button>
+          <!-- マネージャーフィルタ -->
+          <div style="position:relative;display:flex;align-items:center;">
+            <button id="ltab-mgr-btn" onclick="toggleLineMgrFilter()" style="font-size:11px;padding:8px 10px;white-space:nowrap;background:none;border:none;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:3px;position:relative;">
+              <span id="ltab-mgr-label">担当者▾</span>
+            </button>
+            <div id="ltab-mgr-panel" style="display:none;position:absolute;top:100%;left:0;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:200;min-width:130px;padding:4px 0;"></div>
+          </div>
           <button id="ltab-todo" class="cr-tab" onclick="switchLineTab('todo')" style="font-size:11px;padding:8px 10px;white-space:nowrap;color:var(--success);font-weight:700;">要対応</button>
           <button id="ltab-spam" class="cr-tab" onclick="switchLineTab('spam')" style="font-size:11px;padding:8px 10px;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>SPAM</button>
           <button id="ltab-other" class="cr-tab" onclick="switchLineTab('other')" style="font-size:11px;padding:8px 10px;white-space:nowrap;color:var(--muted);display:flex;align-items:center;gap:3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>管轄外</button>

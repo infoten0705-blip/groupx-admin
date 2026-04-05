@@ -189,6 +189,10 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
       LINE管理
       <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(42,191,171,.15);color:var(--accent);margin-left:2px;">β</span>
     </div>
+    <div class="ni" id="nav-analytics" onclick="showPage('analytics',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      クリエイター分析
+    </div>
     <div class="ns">管理</div>
     <div class="ni" id="nav-clients" onclick="showPage('clients',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8l-2 4h12l-2-4z"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>
@@ -344,6 +348,49 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
     <div class="ld"><div class="sp"></div>読み込み中...</div>
   </div>
 </div>
+
+      <!-- クリエイター分析ページ -->
+      <div id="page-analytics" class="screen" style="flex-direction:column;">
+        <div class="ph" style="flex-shrink:0;">
+          <div>
+            <div class="pt">クリエイター分析</div>
+            <div class="ps">TikTok Shop LIVE・動画パフォーマンス分析</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;">
+            <select id="analytics-creator-sel" onchange="onAnalyticsCreatorChange()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-size:13px;min-width:180px;">
+              <option value="">クリエイターを選択...</option>
+            </select>
+            <label style="cursor:pointer;">
+              <span class="btn bs bsm" style="pointer-events:none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                LIVEデータ
+              </span>
+              <input type="file" accept=".xlsx,.csv" style="display:none;" onchange="importAnalyticsLiveData(this)">
+            </label>
+            <label style="cursor:pointer;">
+              <span class="btn bs bsm" style="pointer-events:none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                動画データ
+              </span>
+              <input type="file" accept=".xlsx,.csv" style="display:none;" onchange="importAnalyticsVideoData(this)">
+            </label>
+            <label style="cursor:pointer;">
+              <span class="btn bs bsm" style="pointer-events:none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                全体データ
+              </span>
+              <input type="file" accept=".xlsx,.csv" style="display:none;" onchange="importAnalyticsOverallData(this)">
+            </label>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:0 24px 32px;">
+          <div id="analytics-kpi-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;padding-top:4px;">
+            <div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">クリエイターを選択してください</div>
+          </div>
+          <div id="analytics-daily-wrap" style="display:none;margin-bottom:20px;"></div>
+          <div id="analytics-live-wrap"></div>
+        </div>
+      </div>
     </div><!-- /.page -->
   </main>
 
@@ -952,6 +999,7 @@ function showPage(name,el){
   if(name==='auditlog')loadAuditLog();
   if(name==='clients'){if(typeof renderClientTable==='function')renderClientTable();}
   if(name==='creators')loadCreators();
+  if(name==='analytics')loadAnalyticsPage();
   if(name==='planning'){loadGmvDashboard();}
   if(name==='grouplink'){renderGlProducts();renderGlSelected();renderGlHistory();}
 }
@@ -1576,6 +1624,384 @@ async function loadAuditLog(){
 }
 
 /* ── トースト ── */
+
+/* ── クリエイター分析 ── */
+
+var _analyticsLiveSessions = [];
+var _analyticsOverallStats = [];
+var _analyticsCreatorUsername = null;
+
+async function loadAnalyticsPage() {
+  var r = await _sb.from('users').select('tiktok_id, name').not('tiktok_id', 'is', null).order('name', {ascending:true});
+  var sel = document.getElementById('analytics-creator-sel');
+  if (sel && !r.error) {
+    sel.innerHTML = '<option value="">クリエイターを選択...</option>'
+      + (r.data||[]).map(function(u){
+          return '<option value="'+esc(u.tiktok_id)+'">'+esc(u.name||u.tiktok_id)+' (@'+esc(u.tiktok_id)+')</option>';
+        }).join('');
+    if (_analyticsCreatorUsername) {
+      sel.value = _analyticsCreatorUsername;
+      renderAnalyticsKPIs();
+      renderAnalyticsDailyComparison();
+      renderAnalyticsLiveTable();
+    }
+  }
+}
+
+async function onAnalyticsCreatorChange() {
+  var sel = document.getElementById('analytics-creator-sel');
+  _analyticsCreatorUsername = sel ? sel.value : null;
+  if (!_analyticsCreatorUsername) {
+    document.getElementById('analytics-kpi-wrap').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">クリエイターを選択してください</div>';
+    document.getElementById('analytics-daily-wrap').style.display = 'none';
+    document.getElementById('analytics-live-wrap').innerHTML = '';
+    return;
+  }
+  await refreshAnalyticsData();
+}
+
+async function refreshAnalyticsData() {
+  if (!_analyticsCreatorUsername) return;
+  var u = _analyticsCreatorUsername;
+  var lr = await _sb.from('creator_live_sessions').select('*').eq('creator_username', u).order('start_time', {ascending:false}).limit(100);
+  _analyticsLiveSessions = lr.data || [];
+  var or = await _sb.from('creator_daily_stats').select('*').eq('creator_username', u).order('snapshot_date', {ascending:false}).limit(30);
+  _analyticsOverallStats = or.data || [];
+  renderAnalyticsKPIs();
+  renderAnalyticsDailyComparison();
+  renderAnalyticsLiveTable();
+}
+
+function renderAnalyticsKPIs() {
+  var wrap = document.getElementById('analytics-kpi-wrap');
+  if (!wrap) return;
+  var s = _analyticsLiveSessions;
+  if (!s.length) {
+    wrap.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">LIVEデータをインポートしてください</div>';
+    return;
+  }
+  var n = s.length;
+  var totalGMV = s.reduce(function(a,x){ return a+(x.affiliate_gmv||0); }, 0);
+  var avgGMV = Math.round(totalGMV / n);
+  var avgGPM = Math.round(s.reduce(function(a,x){ return a+(x.show_gpm||0); },0) / n);
+  var avgViewers = Math.round(s.reduce(function(a,x){ return a+(x.viewers||0); },0) / n);
+  var avgCTR = s.reduce(function(a,x){ return a+(x.ctr||0); },0) / n;
+  var avgCTOR = s.reduce(function(a,x){ return a+(x.ctor||0); },0) / n;
+  var ps = s.filter(function(x){ return x.avg_price > 0; });
+  var avgPrice = ps.length ? Math.round(ps.reduce(function(a,x){ return a+x.avg_price; },0) / ps.length) : 0;
+  var ds = s.filter(function(x){ return x.duration_seconds > 1800; });
+  var avgHourly = ds.length ? Math.round(ds.reduce(function(a,x){ return a+(x.affiliate_gmv||0)/(x.duration_seconds/3600); },0) / ds.length) : 0;
+  var maxGMV = Math.max.apply(null, s.map(function(x){ return x.affiliate_gmv||0; }));
+
+  var cards = [
+    {label:'総GMV', value:aFmtJPY(totalGMV), sub:n+'配信合計', accent:true},
+    {label:'GMV / 配信', value:aFmtJPY(avgGMV), sub:'最高: '+aFmtJPY(maxGMV)},
+    {label:'GMV / 1時間', value:aFmtJPY(avgHourly), sub:'1h換算・平均'},
+    {label:'Show GPM', value:aFmtJPY(avgGPM), sub:'1,000視聴あたり'},
+    {label:'平均視聴者数', value:aFmtNum(avgViewers)+'人', sub:'配信あたり'},
+    {label:'CTR', value:aFmtPct(avgCTR), sub:'商品タップ率'},
+    {label:'CTOR', value:aFmtPct(avgCTOR), sub:'購入転換率'},
+    {label:'客単価', value:aFmtJPY(avgPrice), sub:'平均'},
+  ];
+  wrap.innerHTML = cards.map(function(k){
+    return '<div style="background:'+(k.accent?'var(--accent)':'var(--card)')+';border:1px solid var(--border);border-radius:12px;padding:18px 20px;">'
+      +'<div style="font-size:10px;font-weight:700;color:'+(k.accent?'rgba(0,0,0,.55)':'var(--muted)')+';text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">'+k.label+'</div>'
+      +'<div style="font-size:24px;font-weight:700;color:'+(k.accent?'#000':'var(--text)')+';line-height:1;">'+k.value+'</div>'
+      +'<div style="font-size:11px;color:'+(k.accent?'rgba(0,0,0,.45)':'var(--muted)')+';margin-top:6px;">'+k.sub+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function renderAnalyticsDailyComparison() {
+  var wrap = document.getElementById('analytics-daily-wrap');
+  if (!wrap) return;
+  var stats = _analyticsOverallStats;
+  if (stats.length < 1) { wrap.style.display='none'; return; }
+
+  var now = new Date();
+  var thisM = now.getMonth(), thisY = now.getFullYear();
+  var lastM = thisM === 0 ? 11 : thisM-1;
+  var lastY = thisM === 0 ? thisY-1 : thisY;
+
+  function matchMonth(s, y, m) {
+    var d = new Date(s.snapshot_date);
+    return d.getFullYear()===y && d.getMonth()===m;
+  }
+  var thisStats = stats.filter(function(s){ return matchMonth(s, thisY, thisM); });
+  var lastStats = stats.filter(function(s){ return matchMonth(s, lastY, lastM); });
+
+  var thisGMV = thisStats.length ? Math.max.apply(null, thisStats.map(function(s){ return s.affiliate_gmv||0; })) : 0;
+  var lastGMV = lastStats.length ? Math.max.apply(null, lastStats.map(function(s){ return s.affiliate_gmv||0; })) : 0;
+  if (!thisGMV && !lastGMV) { wrap.style.display='none'; return; }
+
+  var today = now.getDate();
+  var lastDays = new Date(lastY, lastM+1, 0).getDate();
+  var thisDayRate = thisGMV / today;
+  var lastDayRate = lastGMV / lastDays;
+  var delta = thisDayRate - lastDayRate;
+  var isUp = delta >= 0;
+  var deltaPct = lastDayRate > 0 ? (delta/lastDayRate*100) : 0;
+
+  wrap.style.display = 'block';
+  wrap.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;">📊 日割りGMV比較</div>'
+    +'<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">'
+      +'<div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">'+(lastM+1)+'月（前月）</div>'
+        +'<div style="font-size:22px;font-weight:700;color:var(--muted);">'+aFmtJPY(Math.round(lastDayRate))+'<span style="font-size:12px;font-weight:400;"> /日</span></div>'
+        +'<div style="font-size:11px;color:var(--muted);">'+aFmtJPY(lastGMV)+' ÷ '+lastDays+'日</div>'
+      +'</div>'
+      +'<div style="font-size:20px;color:var(--border);">→</div>'
+      +'<div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">'+(thisM+1)+'月（今月）</div>'
+        +'<div style="font-size:22px;font-weight:700;color:var(--text);">'+aFmtJPY(Math.round(thisDayRate))+'<span style="font-size:12px;font-weight:400;"> /日</span></div>'
+        +'<div style="font-size:11px;color:var(--muted);">'+aFmtJPY(thisGMV)+' ÷ '+today+'日経過</div>'
+      +'</div>'
+      +(lastDayRate>0?'<div style="background:'+(isUp?'rgba(46,204,113,.1)':'rgba(231,76,60,.1)')+';border:1px solid '+(isUp?'var(--success)':'var(--danger)')+';border-radius:10px;padding:12px 20px;">'
+        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">前月比</div>'
+        +'<div style="font-size:20px;font-weight:700;color:'+(isUp?'var(--success)':'var(--danger)')+';">'+(isUp?'↑':'↓')+' '+(delta>=0?'+':'')+aFmtJPY(Math.round(Math.abs(delta)))+'/日</div>'
+        +'<div style="font-size:12px;color:'+(isUp?'var(--success)':'var(--danger)')+';font-weight:600;">'+(deltaPct>=0?'+':'')+deltaPct.toFixed(1)+'%</div>'
+      +'</div>':'')
+    +'</div>'
+  +'</div>';
+}
+
+function renderAnalyticsLiveTable() {
+  var wrap = document.getElementById('analytics-live-wrap');
+  if (!wrap) return;
+  var s = _analyticsLiveSessions.slice(0, 30);
+  if (!s.length) { wrap.innerHTML=''; return; }
+  wrap.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'
+    +'<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">LIVE配信履歴（直近'+s.length+'件）</div>'
+    +'<div style="overflow-x:auto;">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    +'<thead><tr style="background:var(--surface);">'
+    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);white-space:nowrap;">開始日時</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">GMV</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--accent);">1h換算</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">GPM</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">視聴者</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">時間</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">CTR</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">CTOR</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">客単価</th>'
+    +'</tr></thead><tbody>'
+    + s.map(function(x, i){
+        var d = x.start_time ? new Date(x.start_time) : null;
+        var ds = d ? (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0') : '-';
+        var hy = x.duration_seconds>1800 ? Math.round((x.affiliate_gmv||0)/(x.duration_seconds/3600)) : 0;
+        var bg = i%2===0?'transparent':'rgba(255,255,255,.02)';
+        return '<tr style="background:'+bg+';border-bottom:1px solid var(--border);">'
+          +'<td style="padding:8px 14px;white-space:nowrap;">'+ds+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;font-weight:600;">'+aFmtJPY(x.affiliate_gmv)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;font-weight:600;color:var(--accent);">'+(hy?aFmtJPY(hy):'-')+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtJPY(x.show_gpm)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtNum(x.viewers)+'人</td>'
+          +'<td style="padding:8px 14px;text-align:right;color:var(--muted);">'+aFmtDur(x.duration_seconds)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtPct(x.ctr)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtPct(x.ctor)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtJPY(x.avg_price)+'</td>'
+          +'</tr>';
+      }).join('')
+    +'</tbody></table></div></div>';
+}
+
+/* ── 分析フォーマッタ ── */
+function aFmtJPY(n) {
+  n = Math.round(n||0);
+  if (n >= 10000000) return '¥'+(n/10000000).toFixed(1)+'千万';
+  if (n >= 10000) return '¥'+Math.round(n/10000)+'万';
+  return '¥'+n.toLocaleString('ja-JP');
+}
+function aFmtNum(n) { return (n||0).toLocaleString('ja-JP'); }
+function aFmtPct(n) { return ((n||0)*100).toFixed(1)+'%'; }
+function aFmtDur(sec) {
+  if (!sec) return '-';
+  var h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
+  return h+'h'+m+'m';
+}
+
+/* ── インポート処理 ── */
+async function _loadXLSX() {
+  if (typeof XLSX !== 'undefined') return;
+  return new Promise(function(res){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=res; document.head.appendChild(s);
+  });
+}
+function _parseJPY(v){ return parseInt(String(v||0).replace(/[^0-9]/g,''))||0; }
+function _parsePct(v){
+  var s=String(v||0);
+  if(s.includes('%')) return parseFloat(s.replace(/[^0-9.]/g,''))/100;
+  return parseFloat(s)||0;
+}
+function _parseDurSec(v){
+  var s=String(v||'');
+  var h=parseInt((s.match(/(\d+)h/)||[0,0])[1])||0;
+  var m=parseInt((s.match(/(\d+)min/)||[0,0])[1])||0;
+  var sec=parseInt((s.match(/(\d+)s(?:\s|$)/)||[0,0])[1])||0;
+  return h*3600+m*60+sec;
+}
+function _parseAvgViewSec(v){
+  var s=String(v||'');
+  var m=parseInt((s.match(/(\d+)min/)||[0,0])[1])||0;
+  var sec=parseInt((s.match(/(\d+)s/)||[0,0])[1])||0;
+  return m*60+sec;
+}
+function _parseLiveTime(v){
+  if(!v) return null;
+  try{
+    var p=String(v).split(' - ')[0].trim().split(' ');
+    var dp=p[1].split('/'); // DD/MM/YYYY
+    return dp[2]+'-'+dp[1]+'-'+dp[0]+'T'+p[0];
+  }catch(e){return null;}
+}
+
+async function importAnalyticsLiveData(input) {
+  var file=input.files[0]; if(!file){return;} input.value='';
+  await _loadXLSX(); toast('LIVEデータ読み込み中...','info');
+  try {
+    var buf=await file.arrayBuffer();
+    var wb=XLSX.read(buf);
+    var ws=wb.Sheets['LIVE analytics']||wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    var hi=-1;
+    for(var i=0;i<Math.min(5,rows.length);i++){
+      if(rows[i].indexOf('Livestream ID')>=0){hi=i;break;}
+    }
+    if(hi<0){toast('ヘッダーが見つかりません','error');return;}
+    var hdr=rows[hi], idx={};
+    hdr.forEach(function(h,i){idx[String(h)]=i;});
+    var recs=[];
+    for(var r=hi+1;r<rows.length;r++){
+      var row=rows[r];
+      var lid=String(row[idx['Livestream ID']]||'').trim();
+      if(!lid) continue;
+      recs.push({
+        creator_username:String(row[idx['Creator username']]||'').trim(),
+        creator_nickname:String(row[idx['Creator nickname']]||'').trim(),
+        livestream_id:lid,
+        live_title:String(row[idx['LIVE']]||'').trim(),
+        start_time:_parseLiveTime(row[idx['Start time']]),
+        affiliate_gmv:_parseJPY(row[idx['Affiliate GMV']]),
+        direct_gmv:_parseJPY(row[idx['Direct GMV']]),
+        items_sold:parseInt(row[idx['Items sold']])||0,
+        viewers:parseInt(row[idx['Viewers']])||0,
+        show_gpm:_parseJPY(row[idx['Show GPM']]),
+        ctr:_parsePct(row[idx['CTR']]),
+        tap_through_rate:_parsePct(row[idx['Tap-through rate']]),
+        orders_paid:parseInt(row[idx['Orders paid']])||0,
+        customers:parseInt(row[idx['Customers']])||0,
+        duration_seconds:_parseDurSec(row[idx['Duration']]),
+        views:parseInt(row[idx['Views']])||0,
+        comments:parseInt(row[idx['Comments']])||0,
+        shares:parseInt(row[idx['Shares']])||0,
+        likes:parseInt(row[idx['Likes']])||0,
+        avg_price:_parseJPY(row[idx['Avg price']]),
+        ctor:_parsePct(row[idx['CTOR']]),
+        avg_viewing_duration_seconds:_parseAvgViewSec(row[idx['Avg viewing duration']]),
+        new_followers:parseInt(row[idx['New followers']])||0,
+        products_count:parseInt(row[idx['Products']])||0,
+        product_impressions:parseInt(row[idx['Product impressions']])||0,
+        product_clicks:parseInt(row[idx['Product clicks']])||0,
+      });
+    }
+    if(!recs.length){toast('データが見つかりません','error');return;}
+    var res=await _sb.from('creator_live_sessions').upsert(recs,{onConflict:'livestream_id'});
+    if(res.error){toast('保存エラー: '+res.error.message,'error');return;}
+    toast(recs.length+'件のLIVEデータをインポートしました','success');
+    if(_analyticsCreatorUsername) refreshAnalyticsData();
+  } catch(e){ toast('インポートエラー: '+e.message,'error'); }
+}
+
+async function importAnalyticsVideoData(input) {
+  var file=input.files[0]; if(!file){return;} input.value='';
+  await _loadXLSX(); toast('動画データ読み込み中...','info');
+  try {
+    var buf=await file.arrayBuffer();
+    var wb=XLSX.read(buf);
+    var ws=wb.Sheets['Video Analytics']||wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    var hdr=rows[0], idx={};
+    hdr.forEach(function(h,i){idx[String(h)]=i;});
+    var recs=[];
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r];
+      var vid=String(row[idx['Video ID']]||'').trim();
+      if(!vid) continue;
+      recs.push({
+        creator_username:String(row[idx['Creator username']]||'').trim(),
+        creator_nickname:String(row[idx['Creator nickname']]||'').trim(),
+        video_id:vid,
+        video_link:String(row[idx['Link']]||'').trim(),
+        video_name:String(row[idx['Video name']]||'').trim(),
+        post_time:row[idx['Post time']]?new Date(String(row[idx['Post time']])).toISOString():null,
+        affiliate_gmv:_parseJPY(row[idx['Affiliate GMV']]),
+        items_sold:parseInt(row[idx['Items sold']])||0,
+        direct_gmv:_parseJPY(row[idx['Direct GMV']]),
+        views:parseInt(row[idx['Views']])||0,
+        likes:parseInt(row[idx['Likes']])||0,
+        comments:parseInt(row[idx['Comments']])||0,
+        shares:parseInt(row[idx['Shares']])||0,
+        ctr:_parsePct(row[idx['CTR']]),
+        ctor:_parsePct(row[idx['CTOR']]),
+        completion_rate:_parsePct(row[idx['Completion rate']]),
+      });
+    }
+    if(!recs.length){toast('データが見つかりません','error');return;}
+    var res=await _sb.from('creator_video_stats').upsert(recs,{onConflict:'video_id'});
+    if(res.error){toast('保存エラー: '+res.error.message,'error');return;}
+    toast(recs.length+'件の動画データをインポートしました','success');
+  } catch(e){ toast('インポートエラー: '+e.message,'error'); }
+}
+
+async function importAnalyticsOverallData(input) {
+  var file=input.files[0]; if(!file){return;} input.value='';
+  await _loadXLSX(); toast('全体データ読み込み中...','info');
+  try {
+    var buf=await file.arrayBuffer();
+    var wb=XLSX.read(buf);
+    var ws=wb.Sheets['カスタムレポート']||wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    var hdr=rows[0], idx={};
+    hdr.forEach(function(h,i){idx[String(h)]=i;});
+    var snap=new Date().toISOString().slice(0,10);
+    var recs=[];
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r];
+      var uname=String(row[idx['クリエイターのユーザー名']]||'').trim();
+      if(!uname||uname==='-') continue;
+      var dateRange=String(row[idx['日付']]||'').trim();
+      if(!dateRange||dateRange==='概要') continue;
+      recs.push({
+        creator_username:uname,
+        date_range:dateRange,
+        snapshot_date:snap,
+        affiliate_gmv:_parseJPY(row[idx['アフィリエイトGMV']]),
+        affiliate_orders:parseInt(row[idx['アフィリエイト注文数']])||0,
+        live_gmv:_parseJPY(row[idx['アフィリエイトLIVE GMV']]),
+        video_gmv:_parseJPY(row[idx['アフィリエイト動画GMV']]),
+        live_orders:parseInt(row[idx['アフィリエイトLIVE注文']])||0,
+        video_orders:parseInt(row[idx['アフィリエイト動画注文']])||0,
+        live_ctr:_parsePct(row[idx['LIVE CTR']]),
+        video_ctr:_parsePct(row[idx['動画CTR']]),
+        direct_gmv:_parseJPY(row[idx['ダイレクトGMV']]),
+        items_sold:parseInt(row[idx['商品販売数']])||0,
+        live_views:parseInt(row[idx['LIVE視聴数']])||0,
+        video_views:parseInt(row[idx['視聴数']])||0,
+        live_count:parseInt(row[idx['LIVE']])||0,
+        video_count:parseInt(row[idx['動画']])||0,
+        est_commission:_parseJPY(row[idx['推定成果報酬額']]),
+      });
+    }
+    if(!recs.length){toast('データが見つかりません','error');return;}
+    var res=await _sb.from('creator_daily_stats').upsert(recs,{onConflict:'creator_username,date_range,snapshot_date'});
+    if(res.error){toast('保存エラー: '+res.error.message,'error');return;}
+    toast(recs.length+'件の全体データをインポートしました','success');
+    if(_analyticsCreatorUsername) refreshAnalyticsData();
+  } catch(e){ toast('インポートエラー: '+e.message,'error'); }
+}
 
 /* ── グループリンク ── */
 var glSelected = {};

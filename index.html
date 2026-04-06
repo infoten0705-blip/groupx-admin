@@ -1028,6 +1028,11 @@ var editId=null,deleteId=null,csvRows=[],imgB64=null;
 var hiddenCols={price:false,commission:false};
 
 /* ── ログイン ── */
+async function hashPw(pw) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+
 async function doLogin(){
   var email=document.getElementById('l-email').value.trim();
   var pw=document.getElementById('l-pw').value.trim();
@@ -1039,14 +1044,20 @@ async function doLogin(){
     var r=await _sb.from('managers').select('*').eq('email',email).eq('is_active',true);
     if(r.error||!r.data||!r.data.length)throw new Error('アカウントが見つかりません');
     var m=r.data[0];
-    if(m.password_hash!==pw)throw new Error('パスワードが正しくありません');
+    var hashed = await hashPw(pw);
+    // ハッシュ済み or 平文（移行期間）どちらも対応
+    if(m.password_hash !== hashed && m.password_hash !== pw) throw new Error('パスワードが正しくありません');
+    // 平文で保存されていたら自動でハッシュ化して更新
+    if(m.password_hash === pw) {
+      await _sb.from('managers').update({password_hash: hashed}).eq('id', m.id);
+      m.password_hash = hashed;
+    }
     admin=m;err.style.display='none';
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-shell').style.display='grid';
     document.getElementById('admin-av').textContent=m.name[0]||'A';
     document.getElementById('admin-nm').textContent=m.name;
     document.getElementById('admin-rl').textContent=m.role==='admin'?'ADMIN':'MANAGER';
-    // ロールに応じてナビ制御
     applyRoleNav(m.role);
     await _sb.from('managers').update({last_login_at:new Date().toISOString()}).eq('id',m.id);
     writeLog('login','managers',m.id,m.name,null);
@@ -1068,13 +1079,13 @@ async function savePw() {
   var newPw   = document.getElementById('pw-new').value;
   var confirm = document.getElementById('pw-confirm').value;
   var errEl   = document.getElementById('pw-err');
-
   errEl.style.display = 'none';
 
   if (!current || !newPw || !confirm) {
     errEl.textContent = 'すべて入力してください'; errEl.style.display = 'block'; return;
   }
-  if (current !== admin.password_hash) {
+  var currentHashed = await hashPw(current);
+  if (currentHashed !== admin.password_hash && current !== admin.password_hash) {
     errEl.textContent = '現在のパスワードが正しくありません'; errEl.style.display = 'block'; return;
   }
   if (newPw.length < 6) {
@@ -1083,11 +1094,10 @@ async function savePw() {
   if (newPw !== confirm) {
     errEl.textContent = '新しいパスワードが一致しません'; errEl.style.display = 'block'; return;
   }
-
-  var r = await _sb.from('managers').update({ password_hash: newPw }).eq('id', admin.id);
+  var newHashed = await hashPw(newPw);
+  var r = await _sb.from('managers').update({ password_hash: newHashed }).eq('id', admin.id);
   if (r.error) { errEl.textContent = '更新エラー: ' + r.error.message; errEl.style.display = 'block'; return; }
-
-  admin.password_hash = newPw;
+  admin.password_hash = newHashed;
   closeModal('modal-pw');
   toast('パスワードを変更しました', 'success');
 }
@@ -1100,6 +1110,12 @@ function applyRoleNav(role) {
   // 管理者のみ表示するナビ項目
   var adminOnly = ['nav-masters', 'nav-auditlog'];
   adminOnly.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? '' : 'none';
+  });
+  // 管理者のみ表示するボタン
+  var adminBtns = ['btn-api-settings'];
+  adminBtns.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = isAdmin ? '' : 'none';
   });
@@ -3729,7 +3745,22 @@ var _lineUnreadMap    = {};       // contactId → 未読数
 
 /* ── 初期化 ───────────────────────────────── */
 async function loadLinePage() {
-  try { lineConfig = JSON.parse(localStorage.getItem('line_config')||'{}'); } catch(e){}
+  // LINE設定をSupabaseのline_configテーブルから読み込む（全員共有）
+  try {
+    var cr = await _sb.from('line_config').select('*').limit(1).maybeSingle();
+    if (cr.data) {
+      lineConfig = {
+        channelId:     cr.data.channel_id     || '',
+        channelSecret: cr.data.channel_secret || '',
+        accessToken:   cr.data.access_token   || '',
+      };
+    } else {
+      // フォールバック: localStorageから読む（旧データ移行用）
+      try { lineConfig = JSON.parse(localStorage.getItem('line_config')||'{}'); } catch(e){}
+    }
+  } catch(e) {
+    try { lineConfig = JSON.parse(localStorage.getItem('line_config')||'{}'); } catch(e2){}
+  }
   await loadLineContacts();
   startLineRealtime();
 }
@@ -5723,12 +5754,21 @@ function openLineSettings() {
   openModal('modal-line-settings');
 }
 
-function saveLineSettings() {
+async function saveLineSettings() {
   lineConfig = {
     channelId:     document.getElementById('ls-channel-id').value.trim(),
     channelSecret: document.getElementById('ls-channel-secret').value.trim(),
     accessToken:   document.getElementById('ls-access-token').value.trim(),
   };
+  // Supabaseに保存（全員共有）
+  await _sb.from('line_config').upsert({
+    id: 1,
+    channel_id:     lineConfig.channelId,
+    channel_secret: lineConfig.channelSecret,
+    access_token:   lineConfig.accessToken,
+    updated_at:     new Date().toISOString(),
+  }, { onConflict: 'id' });
+  // localStorageにも保存（フォールバック用）
   try { localStorage.setItem('line_config', JSON.stringify(lineConfig)); } catch(e) {}
   closeModal('modal-line-settings');
   loadLinePage();
@@ -6364,7 +6404,7 @@ function toast(msg,type){
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         一括送信
       </button>
-      <button class="btn bs bsm" onclick="openLineSettings()">
+      <button class="btn bs bsm" onclick="openLineSettings()" id="btn-api-settings">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M4.93 4.93a10 10 0 000 14.14"/></svg>
         API設定
       </button>

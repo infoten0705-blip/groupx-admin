@@ -1059,6 +1059,7 @@ async function doLogin(){
     document.getElementById('admin-nm').textContent=m.name;
     document.getElementById('admin-rl').textContent=m.role==='admin'?'ADMIN':'MANAGER';
     applyRoleNav(m.role);
+    checkInitialPassword(m);
     await _sb.from('managers').update({last_login_at:new Date().toISOString()}).eq('id',m.id);
     writeLog('login','managers',m.id,m.name,null);
     loadProducts();loadCounts();if(typeof loadClients==='function')loadClients();loadCreators();populateManagerSelects();initAllMasterSelects();
@@ -1162,7 +1163,8 @@ function showPage(name,el){
     loadLinePage();
     return;
   }
-  document.getElementById('page-'+name).classList.add('active');
+  var pageEl = document.getElementById('page-'+name);
+  if (pageEl) pageEl.classList.add('active');
   if(el)el.classList.add('active');
   if(name==='contacts')loadContacts();
   if(name==='masters'){initMasters();}
@@ -6342,10 +6344,24 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLigh
 var _adminErrorLog = [];
 function adminError(context, err) {
   var msg = (err && err.message) ? err.message : String(err);
-  _adminErrorLog.unshift({ time: new Date().toLocaleTimeString('ja-JP'), context: context, msg: msg });
+  var entry = { time: new Date().toLocaleTimeString('ja-JP'), context: context, msg: msg };
+  _adminErrorLog.unshift(entry);
   if (_adminErrorLog.length > 50) _adminErrorLog.pop();
   renderAdminErrorBadge();
   console.error('[' + context + ']', err);
+  // Supabaseにエラーログを保存（管理者が確認できるように）
+  if (typeof _sb !== 'undefined' && admin) {
+    try {
+      _sb.from('error_logs').insert({
+        manager_id:   admin.id,
+        manager_name: admin.name,
+        context:      context,
+        message:      msg,
+        url:          window.location.href,
+        created_at:   new Date().toISOString()
+      }).then(function(){});
+    } catch(e) {}
+  }
 }
 
 function renderAdminErrorBadge() {
@@ -6359,13 +6375,43 @@ function renderAdminErrorBadge() {
 function openAdminErrorPanel() {
   var panel = document.getElementById('admin-err-panel');
   if (!panel) return;
-  panel.innerHTML = _adminErrorLog.map(function(e) {
-    return '<div style="border-bottom:1px solid var(--border);padding:10px 14px;">'
-      + '<div style="font-size:10px;color:var(--muted);margin-bottom:4px;">' + e.time + ' — ' + e.context + '</div>'
-      + '<div style="font-size:12px;color:var(--danger);word-break:break-all;">' + esc(e.msg) + '</div>'
-      + '</div>';
-  }).join('') || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">エラーはありません</div>';
+  // 管理者の場合はSupabaseから全員のエラーログを取得
+  if (admin && admin.role === 'admin') {
+    _sb.from('error_logs').select('*').order('created_at', {ascending: false}).limit(100).then(function(r) {
+      var logs = (r.data || []);
+      panel.innerHTML = logs.map(function(e) {
+        var t = new Date(e.created_at).toLocaleString('ja-JP');
+        return '<div style="border-bottom:1px solid var(--border);padding:10px 14px;">'
+          + '<div style="font-size:10px;color:var(--muted);margin-bottom:4px;">'
+          + t + ' — <strong>' + esc(e.manager_name||'不明') + '</strong> — ' + esc(e.context)
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--danger);word-break:break-all;">' + esc(e.message) + '</div>'
+          + '</div>';
+      }).join('') || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">エラーはありません</div>';
+    });
+    panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">読み込み中...</div>';
+  } else {
+    panel.innerHTML = _adminErrorLog.map(function(e) {
+      return '<div style="border-bottom:1px solid var(--border);padding:10px 14px;">'
+        + '<div style="font-size:10px;color:var(--muted);margin-bottom:4px;">' + e.time + ' — ' + e.context + '</div>'
+        + '<div style="font-size:12px;color:var(--danger);word-break:break-all;">' + esc(e.msg) + '</div>'
+        + '</div>';
+    }).join('') || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">エラーはありません</div>';
+  }
   document.getElementById('admin-err-modal').classList.add('open');
+}
+
+// 初期パスワード変更チェック（ログイン後に呼び出し）
+function checkInitialPassword(m) {
+  // password_hashが平文っぽい（短い・ハッシュ形式でない）場合に促す
+  var hash = m.password_hash || '';
+  var isHashed = hash.length === 64 && /^[0-9a-f]+$/.test(hash);
+  if (!isHashed) {
+    setTimeout(function() {
+      var ok = confirm('セキュリティのため、初期パスワードを変更してください。\n今すぐ変更しますか？');
+      if (ok) openPwModal();
+    }, 1000);
+  }
 }
 
 // グローバルエラーキャッチ

@@ -174,6 +174,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span id="admin-err-badge" style="display:none;position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:var(--danger);color:#fff;font-size:9px;font-weight:700;align-items:center;justify-content:center;">0</span>
       </button>
+      <button class="btn bs bsm" onclick="openPwModal()">PW変更</button>
       <button class="btn bs bsm" onclick="doLogout()">ログアウト</button>
     </div>
   </header>
@@ -356,10 +357,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
             <div class="pt">クリエイター分析</div>
             <div class="ps">TikTok Shop LIVE・動画パフォーマンス分析</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;">
-            <select id="analytics-creator-sel" onchange="onAnalyticsCreatorChange()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-size:13px;min-width:180px;">
-              <option value="">クリエイターを選択...</option>
-            </select>
+          <div style="display:flex;gap:8px;align-items:center;margin-left:auto;" id="analytics-import-btns" style="display:none;">
             <label style="cursor:pointer;">
               <span class="btn bs bsm" style="pointer-events:none;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -381,18 +379,111 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
               </span>
               <input type="file" accept=".xlsx,.csv" style="display:none;" onchange="importAnalyticsOverallData(this)">
             </label>
+            <button onclick="analyticsBackToList()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;color:var(--muted);font-size:12px;">← 戻る</button>
           </div>
         </div>
-        <div style="flex:1;overflow-y:auto;padding:0 24px 32px;">
-          <div id="analytics-kpi-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;padding-top:4px;">
-            <div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">クリエイターを選択してください</div>
+        <div style="flex:1;overflow-y:auto;padding:0 24px 32px;" id="analytics-body">
+          <!-- クリエイター選択カード一覧 -->
+          <div id="analytics-creator-grid" style="padding-top:8px;">
+            <div style="text-align:center;color:var(--muted);padding:60px 0;font-size:13px;"><div class="sp" style="margin-bottom:8px;"></div>読み込み中...</div>
           </div>
-          <div id="analytics-daily-wrap" style="display:none;margin-bottom:20px;"></div>
-          <div id="analytics-live-wrap"></div>
+          <!-- 分析コンテンツ（選択後） -->
+          <div id="analytics-content" style="display:none;">
+            <div id="analytics-kpi-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;padding-top:4px;"></div>
+            <div id="analytics-daily-wrap" style="display:none;margin-bottom:20px;"></div>
+            <div id="analytics-live-wrap"></div>
+          </div>
         </div>
       </div>
     </div><!-- /.page -->
+
+      <!-- スカウト管理ページ -->
+      <div id="page-scout" class="screen" style="flex-direction:column;">
+        <div class="ph" style="flex-shrink:0;">
+          <div>
+            <div class="pt">スカウト管理</div>
+            <div class="ps">クリエイタースカウト数のトラッキング・管理</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-left:auto;">
+            <button onclick="openScoutModal()" class="btn ba bsm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              スカウト記録
+            </button>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:0 24px 32px;">
+          <!-- KPI行 -->
+          <div id="scout-kpi-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;padding-top:4px;"></div>
+          <!-- カレンダー + テーブル -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <div id="scout-calendar-wrap" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;"></div>
+            <div id="scout-manager-wrap" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;"></div>
+          </div>
+          <div id="scout-log-wrap"></div>
+        </div>
+      </div>
+
   </main>
+
+<!-- スカウト記録モーダル -->
+<div id="modal-scout" class="mo" onclick="closeOnOverlay(event,'modal-scout')">
+  <div class="md" style="max-width:480px;">
+    <div class="mh"><div class="mt2">スカウト記録</div><button class="mc" onclick="closeModal('modal-scout')">&#215;</button></div>
+    <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">担当マネージャー</div>
+        <select id="scout-mgr-sel" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">日付</div>
+        <input type="date" id="scout-date-input" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">スカウト数</div>
+        <input type="number" id="scout-count-input" min="0" max="500" placeholder="例: 50" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">プラットフォーム</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="scout-platform-btns">
+          <button onclick="toggleScoutPlatform(this,'TikTok')" class="scout-plat-btn" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;cursor:pointer;">TikTok</button>
+          <button onclick="toggleScoutPlatform(this,'Instagram')" class="scout-plat-btn" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;cursor:pointer;">Instagram</button>
+          <button onclick="toggleScoutPlatform(this,'YouTube')" class="scout-plat-btn" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;cursor:pointer;">YouTube</button>
+          <button onclick="toggleScoutPlatform(this,'その他')" class="scout-plat-btn" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;cursor:pointer;">その他</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">メモ（任意）</div>
+        <textarea id="scout-memo-input" rows="2" placeholder="ジャンル・特記事項など" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
+      </div>
+      <button onclick="saveScoutRecord()" class="btn ba" style="width:100%;justify-content:center;padding:10px;">記録する</button>
+    </div>
+  </div>
+</div>
+
+<!-- パスワード変更モーダル -->
+<div id="modal-pw" class="mo" onclick="closeOnOverlay(event,'modal-pw')">
+  <div class="md" style="max-width:400px;">
+    <div class="mh"><div class="mt2">パスワード変更</div><button class="mc" onclick="closeModal('modal-pw')">&#215;</button></div>
+    <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">現在のパスワード</div>
+        <input type="password" id="pw-current" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box;" placeholder="現在のパスワード">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">新しいパスワード</div>
+        <input type="password" id="pw-new" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box;" placeholder="新しいパスワード（6文字以上）">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">新しいパスワード（確認）</div>
+        <input type="password" id="pw-confirm" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box;" placeholder="もう一度入力">
+      </div>
+      <div id="pw-err" style="display:none;color:var(--danger);font-size:12px;"></div>
+      <button onclick="savePw()" class="btn ba" style="width:100%;justify-content:center;padding:10px;">変更する</button>
+    </div>
+  </div>
+</div>
 
 <!-- クリエイターCSVインポートモーダル -->
 <div id="modal-creator-csv" class="mo" onclick="closeOnOverlay(event,'modal-creator-csv')">
@@ -955,6 +1046,8 @@ async function doLogin(){
     document.getElementById('admin-av').textContent=m.name[0]||'A';
     document.getElementById('admin-nm').textContent=m.name;
     document.getElementById('admin-rl').textContent=m.role==='admin'?'ADMIN':'MANAGER';
+    // ロールに応じてナビ制御
+    applyRoleNav(m.role);
     await _sb.from('managers').update({last_login_at:new Date().toISOString()}).eq('id',m.id);
     writeLog('login','managers',m.id,m.name,null);
     loadProducts();loadCounts();if(typeof loadClients==='function')loadClients();loadCreators();populateManagerSelects();initAllMasterSelects();
@@ -962,7 +1055,65 @@ async function doLogin(){
   finally{btn.textContent='ログイン';btn.disabled=false;}
 }
 function showErr(msg){var e=document.getElementById('l-err');e.textContent=msg;e.style.display='block';}
+function openPwModal() {
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  document.getElementById('pw-err').style.display = 'none';
+  openModal('modal-pw');
+}
+
+async function savePw() {
+  var current = document.getElementById('pw-current').value;
+  var newPw   = document.getElementById('pw-new').value;
+  var confirm = document.getElementById('pw-confirm').value;
+  var errEl   = document.getElementById('pw-err');
+
+  errEl.style.display = 'none';
+
+  if (!current || !newPw || !confirm) {
+    errEl.textContent = 'すべて入力してください'; errEl.style.display = 'block'; return;
+  }
+  if (current !== admin.password_hash) {
+    errEl.textContent = '現在のパスワードが正しくありません'; errEl.style.display = 'block'; return;
+  }
+  if (newPw.length < 6) {
+    errEl.textContent = '新しいパスワードは6文字以上にしてください'; errEl.style.display = 'block'; return;
+  }
+  if (newPw !== confirm) {
+    errEl.textContent = '新しいパスワードが一致しません'; errEl.style.display = 'block'; return;
+  }
+
+  var r = await _sb.from('managers').update({ password_hash: newPw }).eq('id', admin.id);
+  if (r.error) { errEl.textContent = '更新エラー: ' + r.error.message; errEl.style.display = 'block'; return; }
+
+  admin.password_hash = newPw;
+  closeModal('modal-pw');
+  toast('パスワードを変更しました', 'success');
+}
+
 function doLogout(){admin=null;document.getElementById('app-shell').style.display='none';document.getElementById('login-screen').style.display='flex';}
+
+/* ── ロール別ナビ制御 ── */
+function applyRoleNav(role) {
+  var isAdmin = role === 'admin';
+  // 管理者のみ表示するナビ項目
+  var adminOnly = ['nav-masters', 'nav-auditlog'];
+  adminOnly.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? '' : 'none';
+  });
+}
+
+/* ── ページ表示時の権限チェック ── */
+function checkPageRole(name) {
+  var adminPages = ['masters', 'auditlog'];
+  if (adminPages.includes(name) && admin && admin.role !== 'admin') {
+    toast('この画面は管理者のみアクセスできます', 'error');
+    return false;
+  }
+  return true;
+}
 
 /* ── パスワード表示切替 ── */
 function toggleEye(id,btn){
@@ -976,6 +1127,9 @@ function toggleEye(id,btn){
 
 /* ── ナビ ── */
 function showPage(name,el){
+  // 権限チェック
+  if (!checkPageRole(name)) return;
+
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
 
@@ -1000,6 +1154,7 @@ function showPage(name,el){
   if(name==='clients'){if(typeof renderClientTable==='function')renderClientTable();}
   if(name==='creators')loadCreators();
   if(name==='analytics')loadAnalyticsPage();
+  if(name==='scout')loadScoutPage();
   if(name==='planning'){loadGmvDashboard();}
   if(name==='grouplink'){renderGlProducts();renderGlSelected();renderGlHistory();}
 }
@@ -1631,179 +1786,110 @@ var _analyticsLiveSessions = [];
 var _analyticsOverallStats = [];
 var _analyticsCreatorUsername = null;
 
+/* ── クリエイター分析 ── */
+
+var _analyticsLiveSessions = [];
+var _analyticsOverallStats = [];
+var _analyticsCreatorUsername = null;
+var _analyticsCreators = [];
+
 async function loadAnalyticsPage() {
-  var r = await _sb.from('users').select('tiktok_id, name').not('tiktok_id', 'is', null).order('name', {ascending:true});
-  var sel = document.getElementById('analytics-creator-sel');
-  if (sel && !r.error) {
-    sel.innerHTML = '<option value="">クリエイターを選択...</option>'
-      + (r.data||[]).map(function(u){
-          return '<option value="'+esc(u.tiktok_id)+'">'+esc(u.name||u.tiktok_id)+' (@'+esc(u.tiktok_id)+')</option>';
-        }).join('');
-    if (_analyticsCreatorUsername) {
-      sel.value = _analyticsCreatorUsername;
-      renderAnalyticsKPIs();
-      renderAnalyticsDailyComparison();
-      renderAnalyticsLiveTable();
+  // LIVEデータに存在するcreator_usernameを取得（usersテーブルに紐付いていなくてもOK）
+  var lr = await _sb.from('creator_live_sessions').select('creator_username, creator_nickname').order('creator_username');
+  var ur = await _sb.from('users').select('tiktok_id, name, picture_url').not('tiktok_id', 'is', null);
+
+  // LIVEデータのユーザー名をユニークに集める
+  var liveUsernames = {};
+  (lr.data||[]).forEach(function(x){
+    if (!liveUsernames[x.creator_username]) liveUsernames[x.creator_username] = x.creator_nickname || '';
+  });
+
+  // usersテーブルと突合
+  var usersMap = {};
+  (ur.data||[]).forEach(function(u){ usersMap[u.tiktok_id] = u; });
+
+  // 全クリエイターリスト（LIVEデータあり優先、なければusersから）
+  var all = Object.keys(liveUsernames).map(function(uname){
+    var u = usersMap[uname] || {};
+    return { username: uname, name: u.name || liveUsernames[uname] || uname, picture_url: u.picture_url || null, hasLive: true };
+  });
+  // LIVEデータはないがusersに存在するクリエイターも追加
+  (ur.data||[]).forEach(function(u){
+    if (!liveUsernames[u.tiktok_id]) {
+      all.push({ username: u.tiktok_id, name: u.name || u.tiktok_id, picture_url: u.picture_url || null, hasLive: false });
     }
-  }
+  });
+  all.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+  _analyticsCreators = all;
+
+  renderAnalyticsCreatorGrid();
 }
 
-async function onAnalyticsCreatorChange() {
-  var sel = document.getElementById('analytics-creator-sel');
-  _analyticsCreatorUsername = sel ? sel.value : null;
-  if (!_analyticsCreatorUsername) {
-    document.getElementById('analytics-kpi-wrap').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">クリエイターを選択してください</div>';
-    document.getElementById('analytics-daily-wrap').style.display = 'none';
-    document.getElementById('analytics-live-wrap').innerHTML = '';
+function renderAnalyticsCreatorGrid() {
+  var grid = document.getElementById('analytics-creator-grid');
+  var content = document.getElementById('analytics-content');
+  var importBtns = document.getElementById('analytics-import-btns');
+  if (!grid) return;
+  content.style.display = 'none';
+  importBtns.style.display = 'none';
+  grid.style.display = '';
+
+  if (!_analyticsCreators.length) {
+    grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:80px 0;font-size:13px;">クリエイターデータがありません<br><small>LIVEデータをインポートするか、クリエイター管理でTikTok IDを登録してください</small></div>';
     return;
   }
+
+  grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding-top:8px;">'
+    + _analyticsCreators.map(function(c){
+      var initial = c.name ? c.name[0] : '?';
+      var avatar = c.picture_url
+        ? '<img src="'+esc(c.picture_url)+'" style="width:56px;height:56px;border-radius:50%;object-fit:cover;margin-bottom:10px;">'
+        : '<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:var(--muted);margin-bottom:10px;">'+esc(initial)+'</div>';
+      return '<div onclick="selectAnalyticsCreator(\''+esc(c.username)+'\')" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:all .15s;display:flex;flex-direction:column;align-items:center;" onmouseenter="this.style.borderColor=\'var(--accent)\';this.style.background=\'rgba(42,191,171,.06)\'" onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--card)\'">'
+        + avatar
+        + '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;word-break:break-all;">'+esc(c.name)+'</div>'
+        + '<div style="font-size:10px;color:var(--muted);">@'+esc(c.username)+'</div>'
+        + (c.hasLive ? '<div style="margin-top:8px;font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(42,191,171,.15);color:var(--accent);">LIVEデータあり</div>' : '<div style="margin-top:8px;font-size:9px;padding:2px 8px;border-radius:8px;background:var(--surface);color:var(--muted);">データなし</div>')
+        + '</div>';
+    }).join('')
+    + '</div>';
+}
+
+async function selectAnalyticsCreator(username) {
+  _analyticsCreatorUsername = username;
+  document.getElementById('analytics-creator-grid').style.display = 'none';
+  document.getElementById('analytics-content').style.display = 'block';
+  document.getElementById('analytics-import-btns').style.display = 'flex';
+  // クリエイター名をタイトルに反映
+  var c = _analyticsCreators.find(function(x){ return x.username === username; });
+  document.querySelector('#page-analytics .ps').textContent = (c ? c.name : username) + ' の分析';
   await refreshAnalyticsData();
+}
+
+function analyticsBackToList() {
+  _analyticsCreatorUsername = null;
+  document.getElementById('analytics-content').style.display = 'none';
+  document.getElementById('analytics-import-btns').style.display = 'none';
+  document.getElementById('analytics-creator-grid').style.display = '';
+  document.querySelector('#page-analytics .ps').textContent = 'TikTok Shop LIVE・動画パフォーマンス分析';
 }
 
 async function refreshAnalyticsData() {
   if (!_analyticsCreatorUsername) return;
   var u = _analyticsCreatorUsername;
-  var lr = await _sb.from('creator_live_sessions').select('*').eq('creator_username', u).order('start_time', {ascending:false}).limit(100);
+  var kpiWrap = document.getElementById('analytics-kpi-wrap');
+  if (kpiWrap) kpiWrap.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;"><div class="sp"></div></div>';
+
+  var lr = await _sb.from('creator_live_sessions').select('*').eq('creator_username', u).order('start_time', {ascending:false}).limit(200);
   _analyticsLiveSessions = lr.data || [];
-  var or = await _sb.from('creator_daily_stats').select('*').eq('creator_username', u).order('snapshot_date', {ascending:false}).limit(30);
+  var or = await _sb.from('creator_daily_stats').select('*').eq('creator_username', u).order('snapshot_date', {ascending:false}).limit(60);
   _analyticsOverallStats = or.data || [];
   renderAnalyticsKPIs();
   renderAnalyticsDailyComparison();
   renderAnalyticsLiveTable();
-}
-
-function renderAnalyticsKPIs() {
-  var wrap = document.getElementById('analytics-kpi-wrap');
-  if (!wrap) return;
-  var s = _analyticsLiveSessions;
-  if (!s.length) {
-    wrap.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">LIVEデータをインポートしてください</div>';
-    return;
-  }
-  var n = s.length;
-  var totalGMV = s.reduce(function(a,x){ return a+(x.affiliate_gmv||0); }, 0);
-  var avgGMV = Math.round(totalGMV / n);
-  var avgGPM = Math.round(s.reduce(function(a,x){ return a+(x.show_gpm||0); },0) / n);
-  var avgViewers = Math.round(s.reduce(function(a,x){ return a+(x.viewers||0); },0) / n);
-  var avgCTR = s.reduce(function(a,x){ return a+(x.ctr||0); },0) / n;
-  var avgCTOR = s.reduce(function(a,x){ return a+(x.ctor||0); },0) / n;
-  var ps = s.filter(function(x){ return x.avg_price > 0; });
-  var avgPrice = ps.length ? Math.round(ps.reduce(function(a,x){ return a+x.avg_price; },0) / ps.length) : 0;
-  var ds = s.filter(function(x){ return x.duration_seconds > 1800; });
-  var avgHourly = ds.length ? Math.round(ds.reduce(function(a,x){ return a+(x.affiliate_gmv||0)/(x.duration_seconds/3600); },0) / ds.length) : 0;
-  var maxGMV = Math.max.apply(null, s.map(function(x){ return x.affiliate_gmv||0; }));
-
-  var cards = [
-    {label:'総GMV', value:aFmtJPY(totalGMV), sub:n+'配信合計', accent:true},
-    {label:'GMV / 配信', value:aFmtJPY(avgGMV), sub:'最高: '+aFmtJPY(maxGMV)},
-    {label:'GMV / 1時間', value:aFmtJPY(avgHourly), sub:'1h換算・平均'},
-    {label:'Show GPM', value:aFmtJPY(avgGPM), sub:'1,000視聴あたり'},
-    {label:'平均視聴者数', value:aFmtNum(avgViewers)+'人', sub:'配信あたり'},
-    {label:'CTR', value:aFmtPct(avgCTR), sub:'商品タップ率'},
-    {label:'CTOR', value:aFmtPct(avgCTOR), sub:'購入転換率'},
-    {label:'客単価', value:aFmtJPY(avgPrice), sub:'平均'},
-  ];
-  wrap.innerHTML = cards.map(function(k){
-    return '<div style="background:'+(k.accent?'var(--accent)':'var(--card)')+';border:1px solid var(--border);border-radius:12px;padding:18px 20px;">'
-      +'<div style="font-size:10px;font-weight:700;color:'+(k.accent?'rgba(0,0,0,.55)':'var(--muted)')+';text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">'+k.label+'</div>'
-      +'<div style="font-size:24px;font-weight:700;color:'+(k.accent?'#000':'var(--text)')+';line-height:1;">'+k.value+'</div>'
-      +'<div style="font-size:11px;color:'+(k.accent?'rgba(0,0,0,.45)':'var(--muted)')+';margin-top:6px;">'+k.sub+'</div>'
-      +'</div>';
-  }).join('');
-}
-
-function renderAnalyticsDailyComparison() {
-  var wrap = document.getElementById('analytics-daily-wrap');
-  if (!wrap) return;
-  var stats = _analyticsOverallStats;
-  if (stats.length < 1) { wrap.style.display='none'; return; }
-
-  var now = new Date();
-  var thisM = now.getMonth(), thisY = now.getFullYear();
-  var lastM = thisM === 0 ? 11 : thisM-1;
-  var lastY = thisM === 0 ? thisY-1 : thisY;
-
-  function matchMonth(s, y, m) {
-    var d = new Date(s.snapshot_date);
-    return d.getFullYear()===y && d.getMonth()===m;
-  }
-  var thisStats = stats.filter(function(s){ return matchMonth(s, thisY, thisM); });
-  var lastStats = stats.filter(function(s){ return matchMonth(s, lastY, lastM); });
-
-  var thisGMV = thisStats.length ? Math.max.apply(null, thisStats.map(function(s){ return s.affiliate_gmv||0; })) : 0;
-  var lastGMV = lastStats.length ? Math.max.apply(null, lastStats.map(function(s){ return s.affiliate_gmv||0; })) : 0;
-  if (!thisGMV && !lastGMV) { wrap.style.display='none'; return; }
-
-  var today = now.getDate();
-  var lastDays = new Date(lastY, lastM+1, 0).getDate();
-  var thisDayRate = thisGMV / today;
-  var lastDayRate = lastGMV / lastDays;
-  var delta = thisDayRate - lastDayRate;
-  var isUp = delta >= 0;
-  var deltaPct = lastDayRate > 0 ? (delta/lastDayRate*100) : 0;
-
-  wrap.style.display = 'block';
-  wrap.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;">'
-    +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;">📊 日割りGMV比較</div>'
-    +'<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">'
-      +'<div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">'+(lastM+1)+'月（前月）</div>'
-        +'<div style="font-size:22px;font-weight:700;color:var(--muted);">'+aFmtJPY(Math.round(lastDayRate))+'<span style="font-size:12px;font-weight:400;"> /日</span></div>'
-        +'<div style="font-size:11px;color:var(--muted);">'+aFmtJPY(lastGMV)+' ÷ '+lastDays+'日</div>'
-      +'</div>'
-      +'<div style="font-size:20px;color:var(--border);">→</div>'
-      +'<div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">'+(thisM+1)+'月（今月）</div>'
-        +'<div style="font-size:22px;font-weight:700;color:var(--text);">'+aFmtJPY(Math.round(thisDayRate))+'<span style="font-size:12px;font-weight:400;"> /日</span></div>'
-        +'<div style="font-size:11px;color:var(--muted);">'+aFmtJPY(thisGMV)+' ÷ '+today+'日経過</div>'
-      +'</div>'
-      +(lastDayRate>0?'<div style="background:'+(isUp?'rgba(46,204,113,.1)':'rgba(231,76,60,.1)')+';border:1px solid '+(isUp?'var(--success)':'var(--danger)')+';border-radius:10px;padding:12px 20px;">'
-        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">前月比</div>'
-        +'<div style="font-size:20px;font-weight:700;color:'+(isUp?'var(--success)':'var(--danger)')+';">'+(isUp?'↑':'↓')+' '+(delta>=0?'+':'')+aFmtJPY(Math.round(Math.abs(delta)))+'/日</div>'
-        +'<div style="font-size:12px;color:'+(isUp?'var(--success)':'var(--danger)')+';font-weight:600;">'+(deltaPct>=0?'+':'')+deltaPct.toFixed(1)+'%</div>'
-      +'</div>':'')
-    +'</div>'
-  +'</div>';
-}
-
-function renderAnalyticsLiveTable() {
-  var wrap = document.getElementById('analytics-live-wrap');
-  if (!wrap) return;
-  var s = _analyticsLiveSessions.slice(0, 30);
-  if (!s.length) { wrap.innerHTML=''; return; }
-  wrap.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'
-    +'<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">LIVE配信履歴（直近'+s.length+'件）</div>'
-    +'<div style="overflow-x:auto;">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-    +'<thead><tr style="background:var(--surface);">'
-    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);white-space:nowrap;">開始日時</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">GMV</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--accent);">1h換算</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">GPM</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">視聴者</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">時間</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">CTR</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">CTOR</th>'
-    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">客単価</th>'
-    +'</tr></thead><tbody>'
-    + s.map(function(x, i){
-        var d = x.start_time ? new Date(x.start_time) : null;
-        var ds = d ? (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0') : '-';
-        var hy = x.duration_seconds>1800 ? Math.round((x.affiliate_gmv||0)/(x.duration_seconds/3600)) : 0;
-        var bg = i%2===0?'transparent':'rgba(255,255,255,.02)';
-        return '<tr style="background:'+bg+';border-bottom:1px solid var(--border);">'
-          +'<td style="padding:8px 14px;white-space:nowrap;">'+ds+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;font-weight:600;">'+aFmtJPY(x.affiliate_gmv)+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;font-weight:600;color:var(--accent);">'+(hy?aFmtJPY(hy):'-')+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;">'+aFmtJPY(x.show_gpm)+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;">'+aFmtNum(x.viewers)+'人</td>'
-          +'<td style="padding:8px 14px;text-align:right;color:var(--muted);">'+aFmtDur(x.duration_seconds)+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;">'+aFmtPct(x.ctr)+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;">'+aFmtPct(x.ctor)+'</td>'
-          +'<td style="padding:8px 14px;text-align:right;">'+aFmtJPY(x.avg_price)+'</td>'
-          +'</tr>';
-      }).join('')
-    +'</tbody></table></div></div>';
+  // インポート後のリスト更新
+  var idx = _analyticsCreators.findIndex(function(x){ return x.username === u; });
+  if (idx >= 0) _analyticsCreators[idx].hasLive = _analyticsLiveSessions.length > 0;
 }
 
 /* ── 分析フォーマッタ ── */
@@ -1819,6 +1905,421 @@ function aFmtDur(sec) {
   if (!sec) return '-';
   var h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
   return h+'h'+m+'m';
+}
+
+/* ── Chart.js ロード ── */
+async function _loadChartJS() {
+  if (typeof Chart !== 'undefined') return;
+  return new Promise(function(res){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    s.onload=res; document.head.appendChild(s);
+  });
+}
+var _analyticsCharts = {};
+function _destroyChart(id) {
+  if (_analyticsCharts[id]) { try { _analyticsCharts[id].destroy(); } catch(e){} delete _analyticsCharts[id]; }
+}
+
+/* ── 分析データ計算 ── */
+function _computeAnalytics(sessions) {
+  var s = sessions.filter(function(x){ return x.affiliate_gmv > 0 || x.viewers > 0; });
+  var n = s.length || 1;
+
+  // 基本KPI
+  var totalGMV = s.reduce(function(a,x){ return a+(x.affiliate_gmv||0); },0);
+  var avgGMV = totalGMV/n;
+  var avgGPM = s.reduce(function(a,x){ return a+(x.show_gpm||0); },0)/n;
+  var avgViewers = s.reduce(function(a,x){ return a+(x.viewers||0); },0)/n;
+  var avgCTR = s.reduce(function(a,x){ return a+(x.ctr||0); },0)/n;
+  var avgCTOR = s.reduce(function(a,x){ return a+(x.ctor||0); },0)/n;
+  var ps = s.filter(function(x){ return x.avg_price>0; });
+  var avgPrice = ps.length ? ps.reduce(function(a,x){ return a+x.avg_price; },0)/ps.length : 0;
+  var ds = s.filter(function(x){ return x.duration_seconds>1800; });
+  var avgHourlyGMV = ds.length ? ds.reduce(function(a,x){ return a+(x.affiliate_gmv||0)/(x.duration_seconds/3600); },0)/ds.length : 0;
+  var maxGMV = s.length ? Math.max.apply(null,s.map(function(x){ return x.affiliate_gmv||0; })) : 0;
+  var avgFollowers = s.reduce(function(a,x){ return a+(x.new_followers||0); },0)/n;
+  var avgProducts = s.reduce(function(a,x){ return a+(x.products_count||0); },0)/n;
+
+  // 月別
+  var monthMap = {};
+  s.forEach(function(x){
+    if (!x.start_time) return;
+    var d=new Date(x.start_time), key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if (!monthMap[key]) monthMap[key]={gmv:0,viewers:0,gpm:0,count:0};
+    monthMap[key].gmv += x.affiliate_gmv||0;
+    monthMap[key].viewers += x.viewers||0;
+    monthMap[key].gpm += x.show_gpm||0;
+    monthMap[key].count++;
+  });
+  var months = Object.keys(monthMap).sort();
+
+  // 時間帯別
+  var slots = {morning:{gmv:0,gpm:0,n:0}, evening:{gmv:0,gpm:0,n:0}, other:{gmv:0,gpm:0,n:0}};
+  s.forEach(function(x){
+    if (!x.start_time) return;
+    var h=new Date(x.start_time).getHours();
+    var slot = h>=5&&h<12?'morning':h>=16&&h<21?'evening':'other';
+    slots[slot].gmv+=x.affiliate_gmv||0; slots[slot].gpm+=x.show_gpm||0; slots[slot].n++;
+  });
+
+  // 商品数別
+  var pGroups = [{label:'1-5点',min:1,max:5},{label:'6-10点',min:6,max:10},{label:'11-15点',min:11,max:15},{label:'16-20点',min:16,max:20},{label:'21点以上',min:21,max:999}];
+  pGroups.forEach(function(g){
+    var gs=s.filter(function(x){ return x.products_count>=g.min&&x.products_count<=g.max&&x.affiliate_gmv>0; });
+    g.avgGMV=gs.length?gs.reduce(function(a,x){ return a+x.affiliate_gmv; },0)/gs.length:0;
+    g.count=gs.length;
+  });
+
+  // 視聴者数帯別
+  var vGroups = [{label:'〜3K',min:0,max:3000},{label:'3-8K',min:3000,max:8000},{label:'8-20K',min:8000,max:20000},{label:'20-50K',min:20000,max:50000},{label:'50K+',min:50000,max:9999999}];
+  vGroups.forEach(function(g){
+    var gs=s.filter(function(x){ return x.viewers>g.min&&x.viewers<=g.max&&x.affiliate_gmv>0; });
+    g.avgGMV=gs.length?gs.reduce(function(a,x){ return a+x.affiliate_gmv; },0)/gs.length:0;
+    g.avgGPM=gs.length?gs.reduce(function(a,x){ return a+x.show_gpm; },0)/gs.length:0;
+    g.count=gs.length;
+  });
+
+  // 上位/下位25%のCTOR比較
+  var sorted = s.slice().sort(function(a,b){ return (b.affiliate_gmv||0)-(a.affiliate_gmv||0); });
+  var q=Math.floor(sorted.length/4)||1;
+  var top25 = sorted.slice(0,q), bot25 = sorted.slice(-q);
+  var top25CTOR = top25.reduce(function(a,x){ return a+(x.ctor||0); },0)/top25.length;
+  var bot25CTOR = bot25.length ? bot25.reduce(function(a,x){ return a+(x.ctor||0); },0)/bot25.length : 0;
+  var top25CTR  = top25.reduce(function(a,x){ return a+(x.ctr||0); },0)/top25.length;
+
+  return { n, totalGMV, avgGMV, avgGPM, avgViewers, avgCTR, avgCTOR, avgPrice,
+    avgHourlyGMV, maxGMV, avgFollowers, avgProducts, months, monthMap,
+    slots, pGroups, vGroups, top25CTOR, bot25CTOR, top25CTR };
+}
+
+/* ── インサイト自動生成 ── */
+function _generateInsights(a, s) {
+  var ins = [];
+  var slotBest = a.slots.morning.n>0&&a.slots.morning.gmv/a.slots.morning.n>a.slots.evening.gmv/Math.max(a.slots.evening.n,1);
+  if (slotBest && a.slots.morning.n>2) {
+    var mGMV=Math.round(a.slots.morning.gmv/a.slots.morning.n);
+    var eGMV=Math.round(a.slots.evening.gmv/Math.max(a.slots.evening.n,1));
+    var pct=eGMV>0?Math.round((mGMV-eGMV)/eGMV*100):0;
+    ins.push({type:'green',title:'朝配信（5-12時）がGMVで優位',body:'朝平均: <strong>'+aFmtJPY(mGMV)+'</strong>  夜平均: <strong>'+aFmtJPY(eGMV)+'</strong><br>朝は視聴者あたり購買力が約<strong>'+pct+'%高い</strong>'});
+  }
+  // GPMトレンド（直近3ヶ月）
+  if (a.months.length>=2) {
+    var lastMs=a.months.slice(-3);
+    var gpmTrend=lastMs.map(function(m){ return a.monthMap[m].gpm/a.monthMap[m].count; });
+    if (gpmTrend.length>=2&&gpmTrend[gpmTrend.length-1]>gpmTrend[0]) {
+      ins.push({type:'green',title:'GPMが直近で改善中',body:lastMs.map(function(m,i){ return m.slice(5)+'月: <strong>'+aFmtJPY(gpmTrend[i])+'</strong>'; }).join(' → ')+'<br>配信クオリティは着実に向上中'});
+    }
+  }
+  // 最適商品数
+  var bestPG = a.pGroups.slice().sort(function(a,b){ return b.avgGMV-a.avgGMV; })[0];
+  var worstPG = a.pGroups.filter(function(g){ return g.count>0; }).sort(function(a,b){ return a.avgGMV-b.avgGMV; })[0];
+  if (bestPG&&bestPG.count>2) ins.push({type:'green',title:'商品数'+bestPG.label+'が最高GMV帯',body:'平均GMV: <strong>'+aFmtJPY(bestPG.avgGMV)+'</strong>（'+bestPG.count+'配信）<br>'+(worstPG&&worstPG.label!==bestPG.label?worstPG.label+'は平均'+aFmtJPY(worstPG.avgGMV)+'に対比':'')});
+  // CTOR格差
+  if (a.top25CTOR>0&&a.bot25CTOR>=0) {
+    var diff=a.bot25CTOR>0?Math.round(a.top25CTOR/a.bot25CTOR):0;
+    ins.push({type:'amber',title:'CTR・CTORの格差がGMVを左右',body:'GMV上位25%のCTOR: <strong>'+aFmtPct(a.top25CTOR)+'</strong><br>GMV下位25%のCTOR: <strong>'+aFmtPct(a.bot25CTOR)+'</strong>'+(diff>1?' （<strong>'+diff+'倍差</strong>）':'')+'<br>商品クリック後の購買促進トークが最重要'});
+  }
+  // 視聴者とGMVの関係
+  var highV = a.vGroups.find(function(g){ return g.label==='50K+'; });
+  var midV  = a.vGroups.find(function(g){ return g.label==='3-8K'; });
+  if (highV&&midV&&highV.count>0&&midV.count>0&&midV.avgGPM>highV.avgGPM) {
+    ins.push({type:'amber',title:'視聴者数とGMVは比例しない',body:'50K+視聴: GPM <strong>'+aFmtJPY(highV.avgGPM)+'</strong><br>3-8K視聴: GPM <strong>'+aFmtJPY(midV.avgGPM)+'</strong><br>少人数でもGPM重視の配信が効果的'});
+  }
+  // 視聴者数トレンド
+  if (a.months.length>=3) {
+    var lastMs=a.months.slice(-3);
+    var vTrend=lastMs.map(function(m){ return Math.round(a.monthMap[m].viewers/a.monthMap[m].count); });
+    if (vTrend[vTrend.length-1]<vTrend[0]*0.8) {
+      ins.push({type:'red',title:'視聴者数が減少傾向（要対策）',body:lastMs.map(function(m,i){ return m.slice(5)+'月: <strong>'+aFmtNum(vTrend[i])+'人</strong>'; }).join(' → ')+'<br>新規流入の減少。ライブ告知・露出強化が<strong>急務</strong>'});
+    }
+  }
+  // フォロワー獲得
+  if (a.avgFollowers>0) ins.push({type:'green',title:'配信ごとフォロワー獲得',body:'平均 <strong>'+Math.round(a.avgFollowers)+'人/配信</strong><br>フォロワー数はGMVの先行指標。育成継続が重要'});
+  return ins.slice(0,6);
+}
+
+/* ── アクションプラン自動生成 ── */
+function _generateActions(a) {
+  var acts = [];
+  var slotBest = a.slots.morning.n>0&&a.slots.morning.gmv/a.slots.morning.n>a.slots.evening.gmv/Math.max(a.slots.evening.n,1);
+  if (a.months.length>=2) {
+    var lMs=a.months.slice(-3);
+    var vTrend=lMs.map(function(m){ return Math.round(a.monthMap[m].viewers/a.monthMap[m].count); });
+    if (vTrend.length>=2&&vTrend[vTrend.length-1]<vTrend[0]*0.9) {
+      acts.push({color:'#111',pri:'最優先・即効性あり',title:'視聴者数の回復：ライブ告知・流入強化',items:['ライブ前日・当日朝にショート動画で告知投稿','配信タイトルに商品名・価格・限定感を入れてTap-through率を向上','TikTok広告でライブ露出を補強し新規視聴者を獲得']});
+    }
+  }
+  if (a.avgCTR>0) {
+    var ctrTarget = a.top25CTR>0 ? aFmtPct(a.top25CTR) : '12%';
+    acts.push({color:'#111',pri:'最優先・GPM直結',title:'CTR・CTORを引き上げてGPMをさらに改善',items:['"今クリックして！"の呼びかけを1商品あたり3回以上に増やす','商品ピン留めのタイミングをトークのピーク時に最適化','価格・送料無料・レビュー数をセットで即答できるよう準備（目標CTR: '+ctrTarget+'）']});
+  }
+  if (slotBest&&a.slots.morning.n>0) {
+    var mGMV=Math.round(a.slots.morning.gmv/a.slots.morning.n);
+    var eGMV=Math.round(a.slots.evening.gmv/Math.max(a.slots.evening.n,1));
+    acts.push({color:'#1D9E75',pri:'GMV +'+Math.round((mGMV-eGMV)/Math.max(eGMV,1)*100)+'%の実績',title:'朝配信（5〜12時）へのシフト強化',items:['夜配信の一部を朝にシフト。朝：夜=6：4以上を目指す','5〜9時開始が特に効果的（通勤前の購買意欲が高い）','夜配信はフォロワー獲得・認知拡大に特化しセールスは朝に集中']});
+  }
+  var bestPG=a.pGroups.slice().sort(function(a,b){ return b.avgGMV-a.avgGMV; })[0];
+  if (bestPG&&bestPG.count>1) {
+    acts.push({color:'#1D9E75',pri:'GMV安定化',title:'商品数を'+bestPG.label+'に絞り込む',items:['1配信あたり'+bestPG.label+'を基本構成として厳守','"今日のメイン商品"を1〜2点決めてトーク40%を集中','商品を増やしたい場合は次の配信に回す。詰め込みは厳禁']});
+  }
+  acts.push({color:'#BA7517',pri:'中長期・GMV先行指標',title:'フォロワー獲得を意識した配信構成',items:['各配信の冒頭10分に"初見さん向けコーナー"を設けフォロー促進','ライブ外のショート投稿を週3〜5本投稿してフォロワー母数を拡大','フォロワー増加率を週次でトラッキングし施策の効果を測定']});
+  return acts.slice(0,5);
+}
+
+/* ── メイン描画 ── */
+async function renderAnalyticsKPIs() {
+  var kpiWrap = document.getElementById('analytics-kpi-wrap');
+  var dailyWrap = document.getElementById('analytics-daily-wrap');
+  var liveWrap = document.getElementById('analytics-live-wrap');
+  if (!kpiWrap) return;
+  await _loadChartJS();
+
+  var s = _analyticsLiveSessions;
+  if (!s.length) {
+    kpiWrap.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 0;font-size:13px;">LIVEデータをインポートしてください</div>';
+    if (dailyWrap) dailyWrap.style.display='none';
+    if (liveWrap) liveWrap.innerHTML='';
+    return;
+  }
+
+  var a = _computeAnalytics(s);
+
+  // ── KPIカード
+  var cards=[
+    {label:'総GMV',value:aFmtJPY(a.totalGMV),sub:a.n+'配信合計 ／ アフィリエイト売上合計',desc:'全配信のアフィリエイトGMV合計。クリエイターの総貢献額',accent:true},
+    {label:'GMV / 1時間',value:aFmtJPY(a.avgHourlyGMV),sub:'1h換算・実配信時間から算出',desc:'配信時間あたりの稼ぐ力。長さに関係なく実力が測れる最重要指標',accent:true},
+    {label:'GMV / 配信',value:aFmtJPY(a.avgGMV),sub:'最高: '+aFmtJPY(a.maxGMV)+' ／ 全配信平均',desc:'1配信あたりの売上。配信ごとのばらつきを把握するために使用'},
+    {label:'Show GPM',value:aFmtJPY(a.avgGPM),sub:'視聴者1,000人あたりのGMV',desc:'集客力に左右されない純粋な配信スキルの指標。GPMが高いほど少ない視聴者でも稼げる'},
+    {label:'平均視聴者数',value:aFmtNum(Math.round(a.avgViewers))+'人',sub:'配信あたり同時視聴者数',desc:'ライブ中の同時視聴者平均。TikTokのアルゴリズム評価と新規流入の指標'},
+    {label:'CTR',value:aFmtPct(a.avgCTR),sub:'商品タップ率（表示→クリック）',desc:'ピン留め商品を視聴者がタップした割合。商品紹介の刺さり具合を示す'},
+    {label:'CTOR',value:aFmtPct(a.avgCTOR),sub:'購入転換率（クリック→購入）',desc:'商品をタップした人が実際に買った割合。クロージングトークの質が直結する'},
+    {label:'客単価',value:aFmtJPY(a.avgPrice),sub:'購入1件あたりの平均金額',desc:'高単価商品への誘導力。客単価×CTORがGPMを決める'},
+  ];
+  kpiWrap.innerHTML = cards.map(function(k){
+    return '<div style="background:'+(k.accent?'var(--accent)':'var(--card)')+';border:1px solid '+(k.accent?'transparent':'var(--border)')+';border-radius:12px;padding:18px 20px;">'
+      +'<div style="font-size:10px;font-weight:700;color:'+(k.accent?'rgba(0,0,0,.5)':'var(--muted)')+';text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">'+k.label+'</div>'
+      +'<div style="font-size:22px;font-weight:700;color:'+(k.accent?'#000':'var(--text)')+';line-height:1;margin-bottom:6px;">'+k.value+'</div>'
+      +'<div style="font-size:10px;color:'+(k.accent?'rgba(0,0,0,.45)':'var(--muted)')+';margin-bottom:4px;">'+k.sub+'</div>'
+      +(k.desc?'<div style="font-size:10px;color:'+(k.accent?'rgba(0,0,0,.35)':'rgba(136,146,160,.7)')+';line-height:1.5;border-top:1px solid '+(k.accent?'rgba(0,0,0,.1)':'rgba(255,255,255,.06)')+';padding-top:6px;margin-top:4px;">'+k.desc+'</div>':'')
+      +'</div>';
+  }).join('');
+
+  // 以降はliveWrapに一括描画
+  var html = '';
+
+  // ── 日割り比較
+  var dailyHtml = _buildDailyHtml();
+  if (dailyHtml) html += dailyHtml;
+
+  // ── 月別GMV推移
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">月別 GMV推移</div><div style="font-size:11px;color:var(--muted);opacity:.7;margin-bottom:14px;">起点: LIVEデータのstart_time ／ 月ごとにGMV合計・平均視聴者を集計</div>'
+    +'<div style="position:relative;height:240px;"><canvas id="ac-monthly"></canvas></div>'
+    +'</div>';
+
+  // ── 3チャート行
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px;">'
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:12px;letter-spacing:.04em;">時間帯別 平均GMV</div>'
+      +'<div style="position:relative;height:180px;"><canvas id="ac-timeslot"></canvas></div>'
+    +'</div>'
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:12px;letter-spacing:.04em;">商品数別 平均GMV</div>'
+      +'<div style="position:relative;height:180px;"><canvas id="ac-products"></canvas></div>'
+    +'</div>'
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:12px;letter-spacing:.04em;">視聴者数帯別 GPM</div>'
+      +'<div style="position:relative;height:180px;"><canvas id="ac-viewers"></canvas></div>'
+    +'</div>'
+    +'</div>';
+
+  // ── 直近トレンド
+  if (a.months.length>=2) {
+    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">直近トレンド（月別）</div><div style="font-size:11px;color:var(--muted);opacity:.7;margin-bottom:14px;">起点: 直近6ヶ月の月平均 ／ GPM上昇=スキル向上、視聴者下降=集客課題のシグナル</div>'
+      +'<div style="position:relative;height:200px;"><canvas id="ac-trend"></canvas></div>'
+      +'</div>';
+  }
+
+  // ── インサイト
+  var insights = _generateInsights(a, s);
+  if (insights.length) {
+    var iColors={green:{bg:'rgba(29,158,117,.08)',border:'#1D9E75',text:'#1D9E75'},amber:{bg:'rgba(186,117,23,.08)',border:'#BA7517',text:'#BA7517'},red:{bg:'rgba(192,57,43,.08)',border:'#C0392B',text:'#C0392B'}};
+    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">重要インサイト</div><div style="font-size:11px;color:var(--muted);opacity:.7;margin-bottom:14px;">起点: インポートされた全配信データから自動判定 ／ マネージャーとの会話・クリエイターへのフィードバックに活用</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      + insights.map(function(ins){
+          var c=iColors[ins.type]||iColors.amber;
+          var icon=ins.type==='green'?'✓':ins.type==='red'?'✗':'△';
+          return '<div style="background:'+c.bg+';border-left:3px solid '+c.border+';border-radius:0 8px 8px 0;padding:14px 16px;">'
+            +'<div style="font-size:12px;font-weight:700;color:'+c.text+';margin-bottom:6px;">'+icon+' '+ins.title+'</div>'
+            +'<div style="font-size:11px;color:var(--muted);line-height:1.7;">'+ins.body+'</div>'
+            +'</div>';
+        }).join('')
+      +'</div></div>';
+  }
+
+  // ── アクションプラン
+  var actions = _generateActions(a);
+  if (actions.length) {
+    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">改善アクションプラン（優先度順）</div><div style="font-size:11px;color:var(--muted);opacity:.7;margin-bottom:14px;">起点: データのパターンから自動生成 ／ クリエイターとの次回面談のアジェンダとして活用</div>'
+      + actions.map(function(act,i){
+          return '<div style="display:flex;gap:16px;align-items:flex-start;padding:16px 0;border-bottom:1px solid var(--border);">'
+            +'<div style="width:32px;height:32px;border-radius:50%;background:'+act.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">'+(i+1)+'</div>'
+            +'<div style="flex:1;">'
+              +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+                +act.title
+                +'<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(42,191,171,.15);color:var(--accent);">'+act.pri+'</span>'
+              +'</div>'
+              +'<ul style="margin:0;padding-left:18px;">'
+                +act.items.map(function(item){ return '<li style="font-size:11px;color:var(--muted);line-height:1.8;">'+item+'</li>'; }).join('')
+              +'</ul>'
+            +'</div>'
+          +'</div>';
+        }).join('')
+      +'</div>';
+  }
+
+  // ── 配信履歴テーブル
+  var tbl = s.slice(0,30);
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'
+    +'<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">LIVE配信履歴（直近'+tbl.length+'件）</div>'
+    +'<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    +'<thead><tr style="background:var(--surface);">'
+    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);white-space:nowrap;">開始日時</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">GMV</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--accent);">1h換算</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">GPM</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">視聴者</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">時間</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">CTR</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">CTOR</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--muted);">客単価</th>'
+    +'</tr></thead><tbody>'
+    + tbl.map(function(x,i){
+        var d=x.start_time?new Date(x.start_time):null;
+        var ds=d?(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'):'-';
+        var hy=x.duration_seconds>1800?Math.round((x.affiliate_gmv||0)/(x.duration_seconds/3600)):0;
+        return '<tr style="border-bottom:1px solid var(--border);">'
+          +'<td style="padding:8px 14px;white-space:nowrap;color:var(--muted);">'+ds+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;font-weight:600;">'+aFmtJPY(x.affiliate_gmv)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;font-weight:600;color:var(--accent);">'+(hy?aFmtJPY(hy):'-')+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtJPY(x.show_gpm)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtNum(x.viewers)+'人</td>'
+          +'<td style="padding:8px 14px;text-align:right;color:var(--muted);">'+aFmtDur(x.duration_seconds)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtPct(x.ctr)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtPct(x.ctor)+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;">'+aFmtJPY(x.avg_price)+'</td>'
+          +'</tr>';
+      }).join('')
+    +'</tbody></table></div></div>';
+
+  if (liveWrap) liveWrap.innerHTML = html;
+  if (dailyWrap) dailyWrap.style.display = 'none'; // daily is now inside liveWrap
+
+  // ── チャート描画（DOM確定後）
+  setTimeout(function(){
+    var ACCENT='#2ABFAB', AMBER='#BA7517', DARK='rgba(255,255,255,.85)', GRAY='rgba(255,255,255,.2)', RED='#C0392B';
+    var gridColor='rgba(255,255,255,.06)';
+
+    // 月別GMV
+    _destroyChart('monthly');
+    var mLabels = a.months.map(function(m){ return m.slice(5)+'月'; });
+    var mGMV    = a.months.map(function(m){ return a.monthMap[m].gmv; });
+    var mViewer = a.months.map(function(m){ return Math.round(a.monthMap[m].viewers/a.monthMap[m].count); });
+    var mCtx = document.getElementById('ac-monthly');
+    if (mCtx) _analyticsCharts['monthly'] = new Chart(mCtx, {type:'bar',data:{labels:mLabels,datasets:[
+      {label:'月間GMV',data:mGMV,backgroundColor:'rgba(42,191,171,.7)',borderRadius:4,yAxisID:'y'},
+      {label:'平均視聴者',data:mViewer,type:'line',borderColor:RED,backgroundColor:'transparent',pointBackgroundColor:RED,pointRadius:4,borderWidth:2,tension:0.3,yAxisID:'y2'}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:'#888',boxWidth:10,font:{size:10}}}},scales:{
+      y:{ticks:{callback:function(v){ return v>=10000000?(v/10000000).toFixed(0)+'千万':v>=10000?(v/10000).toFixed(0)+'万':v; },color:'#666',font:{size:10}},grid:{color:gridColor}},
+      y2:{position:'right',ticks:{callback:function(v){ return v.toLocaleString()+'人'; },color:'#666',font:{size:10}},grid:{display:false}}
+    }}});
+
+    // 時間帯別
+    _destroyChart('timeslot');
+    var tsCtx = document.getElementById('ac-timeslot');
+    if (tsCtx) _analyticsCharts['timeslot'] = new Chart(tsCtx,{type:'bar',data:{labels:['朝（5-12時）','その他','夜（16-21時）'],datasets:[{data:[Math.round(a.slots.morning.gmv/Math.max(a.slots.morning.n,1)),Math.round(a.slots.other.gmv/Math.max(a.slots.other.n,1)),Math.round(a.slots.evening.gmv/Math.max(a.slots.evening.n,1))],backgroundColor:[ACCENT,'rgba(255,255,255,.3)','rgba(255,255,255,.15)'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){ return v>=10000?(v/10000).toFixed(0)+'万':v; },color:'#666',font:{size:9}},grid:{color:gridColor}},x:{ticks:{color:'#666',font:{size:9}},grid:{display:false}}}}});
+
+    // 商品数別
+    _destroyChart('products');
+    var pCtx = document.getElementById('ac-products');
+    if (pCtx) {
+      var pColors = a.pGroups.map(function(g,i){
+        var best=a.pGroups.slice().sort(function(a,b){return b.avgGMV-a.avgGMV;})[0];
+        return g.label===best.label?ACCENT:g.avgGMV<10000&&g.count>0?RED:'rgba(255,255,255,.25)';
+      });
+      _analyticsCharts['products'] = new Chart(pCtx,{type:'bar',data:{labels:a.pGroups.map(function(g){ return g.label; }),datasets:[{data:a.pGroups.map(function(g){ return Math.round(g.avgGMV); }),backgroundColor:pColors,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){ return v>=10000?(v/10000).toFixed(0)+'万':v; },color:'#666',font:{size:9}},grid:{color:gridColor}},x:{ticks:{color:'#666',font:{size:9}},grid:{display:false}}}}});
+    }
+
+    // 視聴者数帯別GPM
+    _destroyChart('viewers');
+    var vCtx = document.getElementById('ac-viewers');
+    if (vCtx) _analyticsCharts['viewers'] = new Chart(vCtx,{type:'bar',data:{labels:a.vGroups.map(function(g){ return g.label; }),datasets:[{label:'GPM',data:a.vGroups.map(function(g){ return Math.round(g.avgGPM); }),backgroundColor:ACCENT,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){ return v+'円'; },color:'#666',font:{size:9}},grid:{color:gridColor}},x:{ticks:{color:'#666',font:{size:9}},grid:{display:false}}}}});
+
+    // 直近トレンド
+    _destroyChart('trend');
+    var trCtx = document.getElementById('ac-trend');
+    if (trCtx&&a.months.length>=2) {
+      var tMs=a.months.slice(-6);
+      var tLab=tMs.map(function(m){ return m.slice(5)+'月('+a.monthMap[m].count+'配信)'; });
+      var tGMV=tMs.map(function(m){ return Math.round(a.monthMap[m].gmv/a.monthMap[m].count); });
+      var tGPM=tMs.map(function(m){ return Math.round(a.monthMap[m].gpm/a.monthMap[m].count); });
+      var tView=tMs.map(function(m){ return Math.round(a.monthMap[m].viewers/a.monthMap[m].count); });
+      _analyticsCharts['trend'] = new Chart(trCtx,{type:'line',data:{labels:tLab,datasets:[
+        {label:'平均GMV',data:tGMV,borderColor:DARK,backgroundColor:'transparent',pointBackgroundColor:DARK,pointRadius:5,borderWidth:2.5,tension:0.3,yAxisID:'y'},
+        {label:'平均GPM',data:tGPM,borderColor:ACCENT,backgroundColor:'transparent',pointBackgroundColor:ACCENT,pointRadius:5,borderWidth:2.5,tension:0.3,yAxisID:'y2'},
+        {label:'平均視聴者',data:tView,borderColor:RED,backgroundColor:'transparent',pointBackgroundColor:RED,pointRadius:5,borderWidth:2,tension:0.3,borderDash:[5,4],yAxisID:'y3'}
+      ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:'#888',boxWidth:10,font:{size:10}}}},scales:{
+        y:{ticks:{callback:function(v){ return v>=10000?(v/10000).toFixed(1)+'万':v; },color:'#666',font:{size:9}},grid:{color:gridColor}},
+        y2:{position:'right',ticks:{callback:function(v){ return v+'円'; },color:'#666',font:{size:9}},grid:{display:false}},
+        y3:{display:false},
+        x:{ticks:{color:'#666',font:{size:10}},grid:{display:false}}
+      }}});
+    }
+  }, 100);
+}
+
+function renderAnalyticsDailyComparison() {
+  // liveWrapに統合したので空実装
+}
+function renderAnalyticsLiveTable() {
+  // renderAnalyticsKPIsに統合
+}
+
+function _buildDailyHtml() {
+  var stats = _analyticsOverallStats;
+  if (!stats.length) return '';
+  var now=new Date(), thisM=now.getMonth(), thisY=now.getFullYear();
+  var lastM=thisM===0?11:thisM-1, lastY=thisM===0?thisY-1:thisY;
+  function matchM(s,y,m){ var d=new Date(s.snapshot_date); return d.getFullYear()===y&&d.getMonth()===m; }
+  var thisStats=stats.filter(function(s){ return matchM(s,thisY,thisM); });
+  var lastStats=stats.filter(function(s){ return matchM(s,lastY,lastM); });
+  var thisGMV=thisStats.length?Math.max.apply(null,thisStats.map(function(s){ return s.affiliate_gmv||0; })):0;
+  var lastGMV=lastStats.length?Math.max.apply(null,lastStats.map(function(s){ return s.affiliate_gmv||0; })):0;
+  if (!thisGMV&&!lastGMV) return '';
+  var today=now.getDate(), lastDays=new Date(lastY,lastM+1,0).getDate();
+  var thisDR=thisGMV/today, lastDR=lastGMV/lastDays;
+  var delta=thisDR-lastDR, isUp=delta>=0;
+  var deltaPct=lastDR>0?(delta/lastDR*100):0;
+  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;">📊 日割りGMV比較（前月→今月）</div>'
+    +'<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">'
+      +'<div><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">'+(lastM+1)+'月（前月）</div>'
+        +'<div style="font-size:22px;font-weight:700;color:var(--muted);">'+aFmtJPY(Math.round(lastDR))+'<span style="font-size:12px;font-weight:400;"> /日</span></div>'
+        +'<div style="font-size:11px;color:var(--muted);">'+aFmtJPY(lastGMV)+' ÷ '+lastDays+'日</div></div>'
+      +'<div style="font-size:24px;color:var(--border);">→</div>'
+      +'<div><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">'+(thisM+1)+'月（今月・'+today+'日経過）</div>'
+        +'<div style="font-size:22px;font-weight:700;color:var(--text);">'+aFmtJPY(Math.round(thisDR))+'<span style="font-size:12px;font-weight:400;"> /日</span></div>'
+        +'<div style="font-size:11px;color:var(--muted);">'+aFmtJPY(thisGMV)+'</div></div>'
+      +(lastDR>0?'<div style="background:'+(isUp?'rgba(46,204,113,.1)':'rgba(231,76,60,.1)')+';border:1px solid '+(isUp?'var(--success)':'var(--danger)')+';border-radius:10px;padding:14px 20px;">'
+        +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">前月比</div>'
+        +'<div style="font-size:22px;font-weight:700;color:'+(isUp?'var(--success)':'var(--danger)')+';">'+(isUp?'↑':'↓')+' '+aFmtJPY(Math.round(Math.abs(delta)))+'/日</div>'
+        +'<div style="font-size:13px;font-weight:600;color:'+(isUp?'var(--success)':'var(--danger)')+';margin-top:2px;">'+(deltaPct>=0?'+':'')+deltaPct.toFixed(1)+'%</div>'
+      +'</div>':'')
+    +'</div></div>';
 }
 
 /* ── インポート処理 ── */
@@ -1910,7 +2411,7 @@ async function importAnalyticsLiveData(input) {
     if(!recs.length){toast('データが見つかりません','error');return;}
     var res=await _sb.from('creator_live_sessions').upsert(recs,{onConflict:'livestream_id'});
     if(res.error){toast('保存エラー: '+res.error.message,'error');return;}
-    toast(recs.length+'件のLIVEデータをインポートしました','success');
+    toast(recs.length+'件のLIVEデータをインポートしました','success');if(_analyticsCreatorUsername){refreshAnalyticsData();}else{loadAnalyticsPage();}
     if(_analyticsCreatorUsername) refreshAnalyticsData();
   } catch(e){ toast('インポートエラー: '+e.message,'error'); }
 }
@@ -2001,6 +2502,261 @@ async function importAnalyticsOverallData(input) {
     toast(recs.length+'件の全体データをインポートしました','success');
     if(_analyticsCreatorUsername) refreshAnalyticsData();
   } catch(e){ toast('インポートエラー: '+e.message,'error'); }
+}
+
+/* ── スカウト管理 ── */
+
+var _scoutRecords = [];
+var _scoutManagers = [];
+var _scoutPlatforms = [];
+var SCOUT_DAILY_TARGET = 50;
+
+async function loadScoutPage() {
+  var mr = await _sb.from('managers').select('id,name').eq('is_active', true).order('name');
+  _scoutManagers = mr.data || [];
+  var rr = await _sb.from('scout_logs').select('*').order('scout_date', {ascending:false}).limit(500);
+  _scoutRecords = rr.data || [];
+  renderScoutKPIs();
+  renderScoutCalendar();
+  renderScoutManagerTable();
+  renderScoutLog();
+  // モーダル選択肢を更新
+  var sel = document.getElementById('scout-mgr-sel');
+  if (sel) {
+    sel.innerHTML = '<option value="">選択してください</option>'
+      + _scoutManagers.map(function(m){ return '<option value="'+m.id+'">'+esc(m.name)+'</option>'; }).join('');
+  }
+}
+
+function renderScoutKPIs() {
+  var wrap = document.getElementById('scout-kpi-wrap');
+  if (!wrap) return;
+  var now = new Date();
+  var thisM = now.getMonth(), thisY = now.getFullYear();
+  var today = now.toISOString().slice(0,10);
+
+  function inMonth(r) { var d=new Date(r.scout_date); return d.getFullYear()===thisY&&d.getMonth()===thisM; }
+  var monthRecs = _scoutRecords.filter(inMonth);
+  var todayRecs = _scoutRecords.filter(function(r){ return r.scout_date===today; });
+
+  var monthTotal = monthRecs.reduce(function(a,r){ return a+(r.count||0); },0);
+  var todayTotal = todayRecs.reduce(function(a,r){ return a+(r.count||0); },0);
+  var daysInMonth = new Date(thisY, thisM+1, 0).getDate();
+  var daysPassed = Math.max(now.getDate(), 1);
+  var dayTarget = SCOUT_DAILY_TARGET * daysPassed;
+  var monthTarget = SCOUT_DAILY_TARGET * daysInMonth;
+  var achieveRate = dayTarget > 0 ? monthTotal/dayTarget*100 : 0;
+  var projectedMonth = daysPassed > 0 ? Math.round(monthTotal/daysPassed*daysInMonth) : 0;
+
+  var cards = [
+    {label:'今日のスカウト数', value:todayTotal+'件', sub:'目標: '+SCOUT_DAILY_TARGET+'件/日',
+     ok: todayTotal >= SCOUT_DAILY_TARGET, accent: todayTotal >= SCOUT_DAILY_TARGET},
+    {label:'今月累計', value:monthTotal.toLocaleString()+'件', sub:daysPassed+'日経過 ／ 目標ペース: '+dayTarget+'件'},
+    {label:'月次達成率', value:achieveRate.toFixed(0)+'%', sub:'目標比 ／ 月間目標: '+monthTarget+'件',
+     warn: achieveRate < 70},
+    {label:'月末着地予測', value:projectedMonth.toLocaleString()+'件', sub:monthTarget+'件目標に対して',
+     warn: projectedMonth < monthTarget},
+  ];
+
+  wrap.innerHTML = cards.map(function(k){
+    var bg = k.accent ? 'var(--accent)' : k.warn ? 'rgba(231,76,60,.08)' : 'var(--card)';
+    var border = k.accent ? 'transparent' : k.warn ? 'rgba(231,76,60,.3)' : 'var(--border)';
+    var tc = k.accent ? '#000' : k.warn ? 'var(--danger)' : 'var(--text)';
+    var mc = k.accent ? 'rgba(0,0,0,.45)' : 'var(--muted)';
+    return '<div style="background:'+bg+';border:1px solid '+border+';border-radius:12px;padding:18px 20px;">'
+      +'<div style="font-size:10px;font-weight:700;color:'+mc+';text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">'+k.label+'</div>'
+      +'<div style="font-size:26px;font-weight:700;color:'+tc+';line-height:1;margin-bottom:6px;">'+k.value+'</div>'
+      +'<div style="font-size:11px;color:'+mc+';">'+k.sub+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function renderScoutCalendar() {
+  var wrap = document.getElementById('scout-calendar-wrap');
+  if (!wrap) return;
+  var now = new Date();
+  var thisM = now.getMonth(), thisY = now.getFullYear();
+  var today = now.toISOString().slice(0,10);
+  var daysInMonth = new Date(thisY, thisM+1, 0).getDate();
+
+  // 日別集計
+  var dayMap = {};
+  _scoutRecords.forEach(function(r){
+    var d = new Date(r.scout_date);
+    if (d.getFullYear()===thisY && d.getMonth()===thisM) {
+      var key = r.scout_date;
+      dayMap[key] = (dayMap[key]||0) + (r.count||0);
+    }
+  });
+  var maxDay = Math.max.apply(null, [1].concat(Object.values(dayMap)));
+
+  var firstDow = new Date(thisY, thisM, 1).getDay();
+  var weeks = ['日','月','火','水','木','金','土'];
+
+  var html = '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">'
+    +thisY+'年'+(thisM+1)+'月 カレンダー</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">'
+    +weeks.map(function(w){ return '<div style="text-align:center;font-size:10px;color:var(--muted);font-weight:700;">'+w+'</div>'; }).join('')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
+
+  for (var i=0; i<firstDow; i++) html += '<div></div>';
+  for (var d=1; d<=daysInMonth; d++) {
+    var key = thisY+'-'+String(thisM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var cnt = dayMap[key]||0;
+    var isToday = key===today;
+    var isPast = new Date(key) < new Date(today);
+    var pct = cnt>0 ? Math.min(cnt/SCOUT_DAILY_TARGET, 1) : 0;
+    var bg = cnt===0 ? (isPast&&d<now.getDate()?'rgba(231,76,60,.15)':'var(--surface)') :
+             cnt>=SCOUT_DAILY_TARGET ? 'rgba(42,191,171,.25)' :
+             'rgba(42,191,171,'+(.08+pct*.15).toFixed(2)+')';
+    var tc = cnt>=SCOUT_DAILY_TARGET ? 'var(--accent)' : cnt>0 ? 'var(--text)' : isPast&&d<now.getDate() ? 'rgba(231,76,60,.5)' : 'var(--muted)';
+    html += '<div style="background:'+bg+';border-radius:6px;padding:6px 2px;text-align:center;border:'+
+      (isToday?'2px solid var(--accent)':'1px solid transparent')+';cursor:default;">'
+      +'<div style="font-size:10px;color:'+tc+';">'+d+'</div>'
+      +(cnt>0?'<div style="font-size:9px;font-weight:700;color:var(--accent);">'+cnt+'</div>':'<div style="font-size:9px;color:transparent;">0</div>')
+      +'</div>';
+  }
+  html += '</div>'
+    +'<div style="display:flex;gap:12px;margin-top:12px;font-size:10px;color:var(--muted);">'
+    +'<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(42,191,171,.25);display:inline-block;"></span>目標達成</span>'
+    +'<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(42,191,171,.12);display:inline-block;"></span>記録あり</span>'
+    +'<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(231,76,60,.15);display:inline-block;"></span>未達</span>'
+    +'</div>';
+  wrap.innerHTML = html;
+}
+
+function renderScoutManagerTable() {
+  var wrap = document.getElementById('scout-manager-wrap');
+  if (!wrap) return;
+  var now = new Date();
+  var thisM = now.getMonth(), thisY = now.getFullYear();
+
+  // マネージャー別・月別集計
+  var mgMap = {};
+  _scoutRecords.forEach(function(r){
+    var d = new Date(r.scout_date);
+    if (d.getFullYear()===thisY && d.getMonth()===thisM) {
+      if (!mgMap[r.manager_id]) mgMap[r.manager_id] = {total:0, days:{}};
+      mgMap[r.manager_id].total += r.count||0;
+      mgMap[r.manager_id].days[r.scout_date] = (mgMap[r.manager_id].days[r.scout_date]||0)+(r.count||0);
+    }
+  });
+  var daysPassed = now.getDate();
+  var monthTarget = SCOUT_DAILY_TARGET * new Date(thisY, thisM+1, 0).getDate();
+
+  var html = '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">マネージャー別 今月実績</div>';
+
+  if (!_scoutManagers.length) { wrap.innerHTML = html+'<div style="color:var(--muted);font-size:13px;">マスター設定でマネージャーを登録してください</div>'; return; }
+
+  html += _scoutManagers.map(function(m){
+    var data = mgMap[m.id] || {total:0, days:{}};
+    var paceTarget = SCOUT_DAILY_TARGET * daysPassed;
+    var rate = paceTarget>0 ? data.total/paceTarget*100 : 0;
+    var activeDays = Object.keys(data.days).length;
+    var projected = activeDays>0 ? Math.round(data.total/daysPassed*new Date(thisY,thisM+1,0).getDate()) : 0;
+    var isOk = rate >= 80;
+    return '<div style="padding:12px 0;border-bottom:1px solid var(--border);">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        +'<div style="font-size:13px;font-weight:700;">'+esc(m.name)+'</div>'
+        +'<div style="font-size:18px;font-weight:700;color:'+(isOk?'var(--accent)':'var(--danger)')+';">'+data.total.toLocaleString()+'件</div>'
+      +'</div>'
+      +'<div style="background:var(--surface);border-radius:4px;height:6px;margin-bottom:6px;overflow:hidden;">'
+        +'<div style="height:100%;border-radius:4px;background:'+(isOk?'var(--accent)':'var(--danger)')+';width:'+Math.min(rate,100).toFixed(0)+'%;transition:width .3s;"></div>'
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);">'
+        +'<span>達成率 '+rate.toFixed(0)+'% ／ 稼働'+activeDays+'日</span>'
+        +'<span>着地予測: '+projected.toLocaleString()+'件</span>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+
+  wrap.innerHTML = html;
+}
+
+function renderScoutLog() {
+  var wrap = document.getElementById('scout-log-wrap');
+  if (!wrap) return;
+  var recs = _scoutRecords.slice(0, 100);
+  if (!recs.length) { wrap.innerHTML=''; return; }
+
+  var mgrMap = {};
+  _scoutManagers.forEach(function(m){ mgrMap[m.id]=m.name; });
+
+  wrap.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'
+    +'<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">記録ログ（直近100件）</div>'
+    +'<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    +'<thead><tr style="background:var(--surface);">'
+    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);">日付</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);">担当</th>'
+    +'<th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--accent);">件数</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);">PF</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--muted);">メモ</th>'
+    +'<th style="padding:9px 14px;text-align:center;font-weight:700;color:var(--muted);">目標</th>'
+    +'<th style="padding:9px 14px;"></th>'
+    +'</tr></thead><tbody>'
+    + recs.map(function(r){
+        var isOk = r.count >= SCOUT_DAILY_TARGET;
+        return '<tr style="border-bottom:1px solid var(--border);">'
+          +'<td style="padding:8px 14px;white-space:nowrap;color:var(--muted);">'+r.scout_date+'</td>'
+          +'<td style="padding:8px 14px;font-weight:600;">'+esc(mgrMap[r.manager_id]||'-')+'</td>'
+          +'<td style="padding:8px 14px;text-align:right;font-weight:700;color:'+(isOk?'var(--accent)':'var(--danger)')+';">'+r.count+'</td>'
+          +'<td style="padding:8px 14px;color:var(--muted);">'+esc(r.platform||'-')+'</td>'
+          +'<td style="padding:8px 14px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.memo||'')+'</td>'
+          +'<td style="padding:8px 14px;text-align:center;">'+(isOk?'<span style="color:var(--accent);">✓</span>':'<span style="color:var(--danger);">✗</span>')+'</td>'
+          +'<td style="padding:8px 14px;"><button onclick="deleteScoutRecord(\''+r.id+'\')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;" title="削除">🗑</button></td>'
+          +'</tr>';
+      }).join('')
+    +'</tbody></table></div></div>';
+}
+
+function openScoutModal() {
+  document.getElementById('scout-date-input').value = new Date().toISOString().slice(0,10);
+  document.getElementById('scout-count-input').value = '';
+  document.getElementById('scout-memo-input').value = '';
+  _scoutPlatforms = [];
+  document.querySelectorAll('.scout-plat-btn').forEach(function(b){
+    b.style.background='none'; b.style.color='var(--muted)'; b.style.borderColor='var(--border)';
+  });
+  openModal('modal-scout');
+}
+
+function toggleScoutPlatform(btn, name) {
+  var idx = _scoutPlatforms.indexOf(name);
+  if (idx>=0) {
+    _scoutPlatforms.splice(idx,1);
+    btn.style.background='none'; btn.style.color='var(--muted)'; btn.style.borderColor='var(--border)';
+  } else {
+    _scoutPlatforms.push(name);
+    btn.style.background='rgba(42,191,171,.15)'; btn.style.color='var(--accent)'; btn.style.borderColor='var(--accent)';
+  }
+}
+
+async function saveScoutRecord() {
+  var mgrId = document.getElementById('scout-mgr-sel').value;
+  var date  = document.getElementById('scout-date-input').value;
+  var cnt   = parseInt(document.getElementById('scout-count-input').value)||0;
+  var memo  = document.getElementById('scout-memo-input').value.trim();
+  if (!mgrId) { toast('担当マネージャーを選択してください','error'); return; }
+  if (!date)  { toast('日付を選択してください','error'); return; }
+  if (cnt<=0) { toast('スカウト数を入力してください','error'); return; }
+
+  var r = await _sb.from('scout_logs').insert({
+    manager_id: mgrId, scout_date: date, count: cnt,
+    platform: _scoutPlatforms.join(',') || null, memo: memo||null
+  });
+  if (r.error) { toast('保存エラー: '+r.error.message,'error'); return; }
+  toast(cnt+'件のスカウトを記録しました','success');
+  closeModal('modal-scout');
+  await loadScoutPage();
+}
+
+async function deleteScoutRecord(id) {
+  if (!confirm('この記録を削除しますか？')) return;
+  await _sb.from('scout_logs').delete().eq('id', id);
+  _scoutRecords = _scoutRecords.filter(function(r){ return r.id !== id; });
+  renderScoutKPIs(); renderScoutCalendar(); renderScoutManagerTable(); renderScoutLog();
+  toast('削除しました','success');
 }
 
 /* ── グループリンク ── */
